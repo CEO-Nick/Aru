@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Floating Todo",
+  "productName": "Aru",
   "version": "0.1.0",
   "identifier": "dev.aruu.floatingtodo",
   "build": {
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Floating Todo",
+        "title": "Aru",
         "width": 320,
         "height": 470,
         "minWidth": 260,

@@ -112,4 +112,100 @@ export default async function (browser) {
     assert.deepEqual(errors, []);
     await context.close();
   });
+
+  async function dragTo(page, fromSelector, target) {
+    const from = page.locator(fromSelector);
+    await from.hover();
+    const grip = await from.locator(".grip").boundingBox();
+    const box = await page.locator(target).boundingBox();
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
+    await page.mouse.up();
+    await page.clock.runFor(10);
+  }
+
+  await scenario("오른쪽 아래에 언젠가 목록이 보이고, 여기서 추가하면 someday.md에 저장된다", async () => {
+    const { page, context, errors } = await openApp(browser, { ...BIG, files: { "someday.md": "- [ ] 여권 갱신\n" } });
+    assert.deepEqual(await texts(page, "someday"), ["여권 갱신"]);
+    const input = page.locator('[data-list="someday"] .add input');
+    await input.fill("책상 정리");
+    await input.press("Enter");
+    await page.clock.runFor(10);
+    assert.equal((await fs(page))["someday.md"], "- [ ] 여권 갱신\n- [ ] 책상 정리\n");
+    assert.deepEqual(errors, []);
+    await context.close();
+  });
+
+  await scenario("언젠가 항목을 달력 날짜 칸에 끌어다 놓으면 그 날짜로 옮겨진다", async () => {
+    const { page, context } = await openApp(browser, {
+      ...BIG,
+      files: { "someday.md": "- [ ] 여권 갱신\n- [ ] 책상 정리\n", "daily/2026-10-20.md": "- [ ] 보고서\n" },
+    });
+    await dragTo(page, '[data-list="someday"] .item >> nth=0', '.cell[data-date="2026-10-20"]');
+    const files = await fs(page);
+    assert.equal(files["someday.md"], "- [ ] 책상 정리\n");
+    assert.equal(files["daily/2026-10-20.md"], "- [ ] 보고서\n- [ ] 여권 갱신\n");
+    assert.deepEqual(await cellTexts(page, "2026-10-20"), ["보고서", "여권 갱신"]);
+    await context.close();
+  });
+
+  await scenario("언젠가 항목을 고른 날짜 칸이나 위쪽 목록에 놓으면 오른쪽 위 목록으로 들어간다", async () => {
+    const { page, context } = await openApp(browser, {
+      ...BIG,
+      files: { "someday.md": "- [ ] 여권 갱신\n- [ ] 책상 정리\n", "daily/2026-10-14.md": "- [ ] 오늘 일\n" },
+    });
+    await dragTo(page, '[data-list="someday"] .item >> nth=0', '.cell[data-date="2026-10-14"]');
+    assert.deepEqual(await texts(page, "overview"), ["오늘 일", "여권 갱신"]);
+    await dragTo(page, '[data-list="someday"] .item >> nth=0', '[data-list="overview"] .add');
+    assert.deepEqual(await texts(page, "overview"), ["오늘 일", "여권 갱신", "책상 정리"]);
+    assert.deepEqual(await texts(page, "someday"), []);
+    const files = await fs(page);
+    assert.equal(files["daily/2026-10-14.md"], "- [ ] 오늘 일\n- [ ] 여권 갱신\n- [ ] 책상 정리\n");
+    assert.equal(files["someday.md"], undefined);
+    await context.close();
+  });
+
+  await scenario("날짜 할 일을 언젠가로 내리거나 다른 날짜 칸으로 옮길 수 있다", async () => {
+    const { page, context } = await openApp(browser, {
+      ...BIG,
+      files: { "daily/2026-10-14.md": "- [ ] 하나\n- [ ] 둘\n" },
+    });
+    await dragTo(page, '[data-list="overview"] .item >> nth=0', '[data-list="someday"] .add');
+    await dragTo(page, '[data-list="overview"] .item >> nth=0', '.cell[data-date="2026-10-16"]');
+    const files = await fs(page);
+    assert.equal(files["someday.md"], "- [ ] 하나\n");
+    assert.equal(files["daily/2026-10-16.md"], "- [ ] 둘\n");
+    assert.equal(files["daily/2026-10-14.md"], undefined);
+    await context.close();
+  });
+
+  await scenario("드래그 중 달력 칸 위에 있으면 그 칸이 표시되고, Esc로 취소하면 아무것도 안 옮겨진다", async () => {
+    const { page, context } = await openApp(browser, { ...BIG, files: { "someday.md": "- [ ] 여권 갱신\n" } });
+    const from = page.locator('[data-list="someday"] .item').first();
+    await from.hover();
+    const grip = await from.locator(".grip").boundingBox();
+    const cell = await page.locator('.cell[data-date="2026-10-20"]').boundingBox();
+    await page.mouse.move(grip.x + 3, grip.y + 3);
+    await page.mouse.down();
+    await page.mouse.move(cell.x + 30, cell.y + 30, { steps: 8 });
+    assert.ok(await page.locator('.cell[data-date="2026-10-20"]').evaluate((e) => e.classList.contains("drop-target")));
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+    await page.clock.runFor(10);
+    assert.deepEqual(await texts(page, "someday"), ["여권 갱신"]);
+    assert.equal((await fs(page))["daily/2026-10-20.md"], undefined);
+    await context.close();
+  });
+
+  await scenario("작은 창에서 언젠가를 고치면 모아보기 창도 다시 읽는다", async () => {
+    const { page, context } = await openApp(browser, { ...BIG, files: { "someday.md": "- [ ] 하나\n" } });
+    await page.evaluate(() => {
+      window.__setFile("someday.md", "- [ ] 하나\n- [ ] 작은 창에서 추가\n");
+      window.__emit("file-changed", { path: "someday.md", source: "main" });
+    });
+    await page.clock.runFor(10);
+    assert.deepEqual(await texts(page, "someday"), ["하나", "작은 창에서 추가"]);
+    await context.close();
+  });
 }

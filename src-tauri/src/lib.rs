@@ -111,7 +111,7 @@ fn open_overview(app: AppHandle, date: Option<String>) -> Result<(), String> {
         None => "index.html#overview".to_string(),
     };
     WebviewWindowBuilder::new(&app, "overview", WebviewUrl::App(url.into()))
-        .title("Floating Todo — 모아보기")
+        .title("Aru — 모아보기")
         .inner_size(1180.0, 760.0)
         .min_inner_size(720.0, 480.0)
         .focused(true)
@@ -160,10 +160,10 @@ fn show_main_window(app: &AppHandle) {
 
 // 기본 앱 메뉴의 "종료"(Cmd+Q)는 화면에 저장할 틈을 주지 않고 바로 끈다. 같은 자리에 저장 후 종료하는 항목을 둔다
 fn build_app_menu(app: &App) -> tauri::Result<Menu<tauri::Wry>> {
-    let quit = MenuItemBuilder::with_id("app-quit", "Floating Todo 종료")
+    let quit = MenuItemBuilder::with_id("app-quit", "Aru 종료")
         .accelerator("CmdOrCtrl+Q")
         .build(app)?;
-    let app_menu = SubmenuBuilder::new(app, "Floating Todo")
+    let app_menu = SubmenuBuilder::new(app, "Aru")
         .about(None)
         .separator()
         .hide()
@@ -202,7 +202,7 @@ fn build_tray(app: &App) -> tauri::Result<()> {
     let menu = Menu::with_items(app, &[&toggle, &quit])?;
 
     let mut tray = TrayIconBuilder::new()
-        .tooltip("Floating Todo")
+        .tooltip("Aru")
         .menu(&menu)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "toggle" => toggle_main_window(app),

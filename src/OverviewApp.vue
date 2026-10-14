@@ -12,7 +12,8 @@ import { AutoSaver } from "./core/autoSaver";
 import { addMonths, monthGrid, monthLabel, monthSummary } from "./core/calendar";
 import { toIsoDate } from "./core/date";
 import { dateLabel } from "./core/format";
-import { parseItems } from "./core/todoFile";
+import { dumpItems, parseItems } from "./core/todoFile";
+import { remove, transfer } from "./core/todoList";
 import type { TodoItem } from "./core/todoList";
 import { onDataRootChanged } from "./platform/dataRoot";
 import { onFileChanged, onSelectDate, showDateInMain } from "./platform/events";
@@ -58,7 +59,31 @@ watch(selected, async () => {
 // 오른쪽에서 고친 내용을 달력 칸에 바로 반영한다
 watch(selectedFile.items, (items) => (itemsByDate[selected.value] = items));
 
-const drag = useListDrag({ overview: selectedFile.items });
+const somedayFile = useTodoFile(ref("someday.md"), tauriStore, saver);
+
+// 언젠가 항목이나 고른 날짜의 항목을 달력의 다른 날짜 칸에 놓으면 그 날짜로 옮긴다
+async function dropToDate(sourceKey: string, id: string, date: string) {
+  const source = sourceKey === "someday" ? somedayFile.items : selectedFile.items;
+  const item = source.value.find((t) => t.id === id);
+  if (!item) return;
+  if (date === selected.value) {
+    if (source !== selectedFile.items) {
+      [source.value, selectedFile.items.value] = transfer(source.value, selectedFile.items.value, id, null);
+    }
+    return;
+  }
+  source.value = remove(source.value, id);
+  const path = dayPath(date);
+  const doc = parseItems((await tauriStore.read(path)) ?? "", () => crypto.randomUUID());
+  const items = [...doc.items, item];
+  saver.schedule(path, dumpItems(items, doc.notes), "now");
+  itemsByDate[date] = items;
+}
+
+const drag = useListDrag(
+  { overview: selectedFile.items, someday: somedayFile.items },
+  { onDropToDate: (sourceKey, id, date) => void dropToDate(sourceKey, id, date) },
+);
 
 function select(date: string) {
   selected.value = date;
@@ -77,6 +102,7 @@ function cellClass(date: string) {
     past: date < today.value,
     today: date === today.value,
     sel: date === selected.value,
+    "drop-target": drag.state.marker?.date === date,
   };
 }
 
@@ -94,7 +120,7 @@ const selectedCounts = computed(() => {
 });
 
 onMounted(async () => {
-  await Promise.all([loadMonth(), selectedFile.load()]);
+  await Promise.all([loadMonth(), selectedFile.load(), somedayFile.load()]);
   watchDayChange(() => (today.value = toIsoDate(new Date())));
   window.addEventListener("blur", () => void saver.flush());
   // 창을 오갈 때마다 한 달 치를 읽지 않도록 2초에 한 번으로 묶는다
@@ -103,6 +129,7 @@ onMounted(async () => {
     if (Date.now() - lastRefresh < 2000) return;
     lastRefresh = Date.now();
     void selectedFile.reloadIfChanged();
+    void somedayFile.reloadIfChanged();
     void loadMonth();
   };
   window.addEventListener("focus", refresh);
@@ -111,6 +138,7 @@ onMounted(async () => {
   await onQuitRequested(() => saver.flush());
   await onFileChanged(({ path }) => {
     if (path === selectedFile.path.value) void selectedFile.reloadIfChanged();
+    if (path === somedayFile.path.value) void somedayFile.reloadIfChanged();
     const date = path.match(/^daily\/(\d{4}-\d{2}-\d{2})\.md$/)?.[1];
     if (date && date !== selected.value && grid.value.includes(date)) void readDay(date);
   });
@@ -139,6 +167,7 @@ onMounted(async () => {
           class="cell"
           :class="cellClass(date)"
           :data-date="date"
+          :data-drop-date="date"
           @click="select(date)"
         >
           <span class="num">{{ Number(date.slice(8)) }}</span>
@@ -176,6 +205,20 @@ onMounted(async () => {
           :dragging-id="drag.state.draggingId"
           @drag-start="(id, e) => drag.start('overview', id, e)"
         />
+      </div>
+      <div class="side-someday">
+        <div class="side-label">언젠가</div>
+        <div class="side-list">
+          <TodoList
+            v-model="somedayFile.items.value"
+            list-key="someday"
+            placeholder="언젠가 할 일 추가"
+            :marker="drag.state.marker"
+            :dragging-id="drag.state.draggingId"
+            @drag-start="(id, e) => drag.start('someday', id, e)"
+          />
+        </div>
+        <div class="side-hint">⋮⋮ 끌어서 달력 칸에 놓으면 그 날짜로 옮겨진다</div>
       </div>
       <SaveStatusBar :status="saveStatus" :saved-at="savedAt">
         <button class="show-main" @click="showDateInMain(selected)">작은 창에서 보기</button>
@@ -350,6 +393,28 @@ button {
 .side-list {
   flex: 1;
   overflow: auto;
+  min-height: 0;
+}
+.side-someday {
+  flex: 0 0 42%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--line);
+}
+.side-label {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 8px 14px 2px;
+}
+.side-hint {
+  font-size: 11px;
+  color: #6f6f75;
+  padding: 4px 14px 8px;
+}
+.cell.drop-target {
+  box-shadow: inset 0 0 0 2px #30d158;
+  background: rgba(48, 209, 88, 0.1);
 }
 .tag {
   font-size: 11px;
