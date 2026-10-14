@@ -61,7 +61,7 @@ fn set_data_root(app: AppHandle, path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn read_text(app: AppHandle, window: Window, path: String) -> Result<Option<String>, String> {
-    trace(&format!("read {} {}", window.label(), path));
+    trace(&format!("read {} {} @ {}", window.label(), path, data_root(&app)?.display()));
     storage::read_text(&data_root(&app)?, &path)
 }
 
@@ -86,7 +86,7 @@ struct FileChanged {
 // 작은 창과 모아보기 창이 같은 날짜를 함께 열 수 있어서, 한쪽이 쓰면 다른 쪽이 다시 읽게 알린다
 #[tauri::command]
 fn write_text(app: AppHandle, window: Window, path: String, content: String) -> Result<(), String> {
-    trace(&format!("write {} {}", window.label(), path));
+    trace(&format!("write {} {} @ {}", window.label(), path, data_root(&app)?.display()));
     storage::write_text(&data_root(&app)?, &path, &content)?;
     let _ = app.emit(
         "file-changed",
@@ -236,6 +236,15 @@ pub fn run() {
             });
             // 화면 자동 점검용: 개발 빌드에서 FT_OPEN_OVERVIEW=1(또는 YYYY-MM-DD) 이면 모아보기 창도 바로 연다
             #[cfg(debug_assertions)]
+            // 화면 자동 점검용: FT_SWITCH_ROOT=<폴더> 면 6초 뒤 저장 폴더 변경을 실제 경로 그대로 실행한다
+            if let Ok(target) = std::env::var("FT_SWITCH_ROOT") {
+                let handle = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(Duration::from_secs(6));
+                    let result = set_data_root(handle, target);
+                    trace(&format!("switch-root {result:?}"));
+                });
+            }
             if let Ok(value) = std::env::var("FT_OPEN_OVERVIEW") {
                 let date = (value.len() == 10).then_some(value);
                 open_overview(app.handle().clone(), date)?;

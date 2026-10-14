@@ -42,10 +42,16 @@ fn resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
 
 /// 새 저장 폴더가 비어 있으면 지금까지의 할 일을 복사해 둔다. 이미 할 일이 있는 폴더(다른 컴퓨터와 동기화 중인 폴더)는 건드리지 않는다
 pub fn copy_into_if_empty(from: &Path, to: &Path) -> Result<bool, String> {
+    // 설정은 할 일과 따로 본다. 새 폴더에 설정이 없으면 지금 설정(투명도·핀·미완료 처리)을 가져간다
+    if read_text(to, "settings.json")?.is_none() {
+        if let Some(content) = read_text(from, "settings.json")? {
+            write_text(to, "settings.json", &content)?;
+        }
+    }
     if to.join("daily").exists() || to.join("someday.md").exists() {
         return Ok(false);
     }
-    for name in ["someday.md", "settings.json"] {
+    for name in ["someday.md"] {
         if let Some(content) = read_text(from, name)? {
             write_text(to, name, &content)?;
         }
@@ -123,6 +129,20 @@ mod tests {
 
         assert!(!copy_into_if_empty(&from, &to).unwrap());
         assert_eq!(read_text(&to, "someday.md").unwrap().as_deref(), Some("- [ ] 저기 것\n"));
+    }
+
+    #[test]
+    fn 할_일이_있는_폴더라도_설정이_없으면_지금_설정을_가져간다() {
+        let from = temp_root("copy-from3");
+        let to = temp_root("copy-to3");
+        write_text(&from, "settings.json", "{\"opacity\": 40}\n").unwrap();
+        write_text(&to, "someday.md", "- [ ] 저기 것\n").unwrap();
+        copy_into_if_empty(&from, &to).unwrap();
+        assert_eq!(read_text(&to, "settings.json").unwrap().as_deref(), Some("{\"opacity\": 40}\n"));
+
+        write_text(&from, "settings.json", "{\"opacity\": 90}\n").unwrap();
+        copy_into_if_empty(&from, &to).unwrap();
+        assert_eq!(read_text(&to, "settings.json").unwrap().as_deref(), Some("{\"opacity\": 40}\n"));
     }
 
     #[test]

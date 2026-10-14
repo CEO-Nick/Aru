@@ -133,7 +133,11 @@ onMounted(async () => {
     void loadMonth();
   };
   window.addEventListener("focus", refresh);
-  setInterval(refresh, 15_000);
+  // 주기적으로는 지금 보고 있는 두 목록만 다시 읽는다. 달력 전체는 창을 다시 볼 때 읽는다
+  setInterval(() => {
+    void selectedFile.reloadIfChanged();
+    void somedayFile.reloadIfChanged();
+  }, 15_000);
   await onSelectDate((date) => select(date));
   await onQuitRequested(() => saver.flush());
   await onFileChanged(({ path }) => {
