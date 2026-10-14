@@ -1,0 +1,43 @@
+:root {
+  --bg: #262628;
+  --bar: #2f2f32;
+  --ink: #ececee;
+  --muted: #8e8e93;
+  --icon: #b9b9be;
+  --line: rgba(255, 255, 255, 0.1);
+  --hover: rgba(255, 255, 255, 0.1);
+  --track: #5a5a5e;
+  --thumb: #e4e4e8;
+  --accent: #0a84ff;
+
+  color-scheme: dark;
+  font: 14px/1.5 -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  color: var(--ink);
+  background: var(--bg);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body.dragging,
+body.dragging * {
+  cursor: grabbing !important;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+body.resizing,
+body.resizing * {
+  cursor: row-resize !important;
+  user-select: none;
+  -webkit-user-select: none;
+}

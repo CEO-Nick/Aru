@@ -1,0 +1,127 @@
+use std::fs;
+use std::io::Write;
+use std::path::{Component, Path, PathBuf};
+
+pub fn read_text(root: &Path, rel: &str) -> Result<Option<String>, String> {
+    let path = resolve(root, rel)?;
+    match fs::read_to_string(&path) {
+        Ok(text) => Ok(Some(text)),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(e) => Err(e.to_string()),
+    }
+}
+
+/// 임시 파일에 다 쓴 뒤 이름을 바꿔 교체한다. 쓰는 도중 앱이 꺼져도 원래 파일은 온전하다
+pub fn write_text(root: &Path, rel: &str, content: &str) -> Result<(), String> {
+    let path = resolve(root, rel)?;
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    let tmp = path.with_extension("tmp");
+    let mut file = fs::File::create(&tmp).map_err(|e| e.to_string())?;
+    file.write_all(content.as_bytes()).map_err(|e| e.to_string())?;
+    file.sync_all().map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &path).map_err(|e| e.to_string())
+}
+
+/// 저장 폴더 밖을 가리키는 경로(절대 경로, ..)는 거부한다
+fn resolve(root: &Path, rel: &str) -> Result<PathBuf, String> {
+    let rel_path = Path::new(rel);
+    if rel_path.components().any(|c| !matches!(c, Component::Normal(_))) {
+        return Err(format!("허용되지 않는 경로: {rel}"));
+    }
+    Ok(root.join(rel_path))
+}
+
+/// 새 저장 폴더가 비어 있으면 지금까지의 할 일을 복사해 둔다. 이미 할 일이 있는 폴더(다른 컴퓨터와 동기화 중인 폴더)는 건드리지 않는다
+pub fn copy_into_if_empty(from: &Path, to: &Path) -> Result<bool, String> {
+    if to.join("daily").exists() || to.join("someday.md").exists() {
+        return Ok(false);
+    }
+    for name in ["someday.md", "settings.json"] {
+        if let Some(content) = read_text(from, name)? {
+            write_text(to, name, &content)?;
+        }
+    }
+    let daily = from.join("daily");
+    if daily.is_dir() {
+        for entry in fs::read_dir(&daily).map_err(|e| e.to_string())? {
+            let entry = entry.map_err(|e| e.to_string())?;
+            let name = entry.file_name().to_string_lossy().to_string();
+            if !name.ends_with(".md") {
+                continue;
+            }
+            let rel = format!("daily/{name}");
+            if let Some(content) = read_text(from, &rel)? {
+                write_text(to, &rel, &content)?;
+            }
+        }
+    }
+    Ok(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_root(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("floating-todo-test-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn 없는_파일을_읽으면_none이다() {
+        let root = temp_root("missing");
+        assert_eq!(read_text(&root, "daily/2026-10-14.md").unwrap(), None);
+    }
+
+    #[test]
+    fn 쓴_내용을_그대로_읽는다_하위_폴더도_만든다() {
+        let root = temp_root("roundtrip");
+        write_text(&root, "daily/2026-10-14.md", "- [ ] 장보기\n").unwrap();
+        assert_eq!(read_text(&root, "daily/2026-10-14.md").unwrap().as_deref(), Some("- [ ] 장보기\n"));
+    }
+
+    #[test]
+    fn 덮어쓰면_새_내용만_남고_임시_파일은_없다() {
+        let root = temp_root("overwrite");
+        write_text(&root, "someday.md", "옛 내용\n").unwrap();
+        write_text(&root, "someday.md", "새 내용\n").unwrap();
+        assert_eq!(read_text(&root, "someday.md").unwrap().as_deref(), Some("새 내용\n"));
+        assert!(!root.join("someday.tmp").exists());
+    }
+
+    #[test]
+    fn 빈_새_폴더로는_할_일_파일을_복사한다() {
+        let from = temp_root("copy-from");
+        let to = temp_root("copy-to");
+        write_text(&from, "daily/2026-10-14.md", "- [ ] 하나\n").unwrap();
+        write_text(&from, "someday.md", "- [ ] 둘\n").unwrap();
+        write_text(&from, "settings.json", "{}\n").unwrap();
+
+        assert!(copy_into_if_empty(&from, &to).unwrap());
+        assert_eq!(read_text(&to, "daily/2026-10-14.md").unwrap().as_deref(), Some("- [ ] 하나\n"));
+        assert_eq!(read_text(&to, "someday.md").unwrap().as_deref(), Some("- [ ] 둘\n"));
+        assert_eq!(read_text(&to, "settings.json").unwrap().as_deref(), Some("{}\n"));
+    }
+
+    #[test]
+    fn 이미_할_일이_있는_폴더에는_복사하지_않는다() {
+        let from = temp_root("copy-from2");
+        let to = temp_root("copy-to2");
+        write_text(&from, "someday.md", "- [ ] 여기 것\n").unwrap();
+        write_text(&to, "someday.md", "- [ ] 저기 것\n").unwrap();
+
+        assert!(!copy_into_if_empty(&from, &to).unwrap());
+        assert_eq!(read_text(&to, "someday.md").unwrap().as_deref(), Some("- [ ] 저기 것\n"));
+    }
+
+    #[test]
+    fn 저장_폴더_밖을_가리키는_경로는_거부한다() {
+        let root = temp_root("escape");
+        assert!(write_text(&root, "../escape.md", "x").is_err());
+        assert!(read_text(&root, "/etc/hosts").is_err());
+    }
+}

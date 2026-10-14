@@ -1,0 +1,355 @@
+<script setup lang="ts">
+import { getCurrentWindow } from "@tauri-apps/api/window";
+import { computed, onMounted, reactive, ref, watch } from "vue";
+import SaveStatusBar from "./components/SaveStatus.vue";
+import TodoList from "./components/TodoList.vue";
+import { dayPath } from "./composables/useRollover";
+import { useTodoFile } from "./composables/useTodoFile";
+import { AutoSaver, type SaveStatus } from "./core/autoSaver";
+import { addMonths, monthGrid, monthLabel, monthSummary } from "./core/calendar";
+import { toIsoDate } from "./core/date";
+import { dateLabel } from "./core/format";
+import { parseItems } from "./core/todoFile";
+import type { TodoItem } from "./core/todoList";
+import { onDataRootChanged } from "./platform/dataRoot";
+import { onFileChanged, showDateInMain } from "./platform/events";
+import { tauriStore } from "./platform/tauriStore";
+
+const MAX_IN_CELL = 3;
+const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+
+const saver = new AutoSaver(tauriStore);
+const saveStatus = ref<SaveStatus>("saved");
+saver.onStatus((s) => (saveStatus.value = s));
+
+const today = ref(toIsoDate(new Date()));
+const month = ref(today.value.slice(0, 7));
+const selected = ref(today.value);
+const grid = computed(() => monthGrid(month.value));
+const itemsByDate = reactive<Record<string, TodoItem[]>>({});
+const summary = computed(() => monthSummary(month.value, itemsByDate));
+
+const selectedFile = useTodoFile(
+  computed(() => dayPath(selected.value)),
+  tauriStore,
+  saver,
+);
+
+async function readDay(date: string) {
+  const content = await tauriStore.read(dayPath(date));
+  itemsByDate[date] = parseItems(content ?? "", () => crypto.randomUUID()).items;
+}
+
+async function loadMonth() {
+  await Promise.all(grid.value.map(readDay));
+}
+
+watch(month, () => void loadMonth());
+watch(selected, async () => {
+  await saver.flush();
+  await selectedFile.load();
+});
+// 오른쪽에서 고친 내용을 달력 칸에 바로 반영한다
+watch(selectedFile.items, (items) => (itemsByDate[selected.value] = items));
+
+function select(date: string) {
+  selected.value = date;
+  if (!date.startsWith(month.value)) month.value = date.slice(0, 7);
+}
+
+function goToday() {
+  today.value = toIsoDate(new Date());
+  month.value = today.value.slice(0, 7);
+  selected.value = today.value;
+}
+
+function cellClass(date: string) {
+  return {
+    out: !date.startsWith(month.value),
+    past: date < today.value,
+    today: date === today.value,
+    sel: date === selected.value,
+  };
+}
+
+const selectedTag = computed(() => {
+  if (selected.value === today.value) return { text: "오늘", cls: "is-today" };
+  return selected.value < today.value
+    ? { text: "지난 날짜", cls: "past" }
+    : { text: "예정", cls: "future" };
+});
+
+const selectedCounts = computed(() => {
+  const items = selectedFile.items.value;
+  const done = items.filter((i) => i.done).length;
+  return { done, pending: items.length - done };
+});
+
+onMounted(async () => {
+  await Promise.all([loadMonth(), selectedFile.load()]);
+  setInterval(() => (today.value = toIsoDate(new Date())), 60_000);
+  window.addEventListener("blur", () => void saver.flush());
+  window.addEventListener("focus", () => {
+    today.value = toIsoDate(new Date());
+    void selectedFile.reloadIfChanged();
+    void loadMonth();
+  });
+  await onFileChanged(({ path }) => {
+    if (path === selectedFile.path.value) void selectedFile.reloadIfChanged();
+    const date = path.match(/^daily\/(\d{4}-\d{2}-\d{2})\.md$/)?.[1];
+    if (date && date !== selected.value && grid.value.includes(date)) void readDay(date);
+  });
+  await onDataRootChanged(() => location.reload());
+  await getCurrentWindow().onCloseRequested(async () => {
+    await saver.flush();
+  });
+});
+</script>
+
+<template>
+  <div class="overview">
+    <div class="calendar">
+      <div class="head">
+        <button class="nav" aria-label="이전 달" @click="month = addMonths(month, -1)">◀</button>
+        <div class="month">{{ monthLabel(month) }}</div>
+        <button class="nav" aria-label="다음 달" @click="month = addMonths(month, 1)">▶</button>
+        <button class="pill" @click="goToday">오늘</button>
+        <span class="summary">이번 달 완료 {{ summary.done }} · 미완료 {{ summary.pending }}</span>
+      </div>
+      <div class="grid">
+        <div v-for="w in WEEKDAYS" :key="w" class="dow">{{ w }}</div>
+        <div
+          v-for="date in grid"
+          :key="date"
+          class="cell"
+          :class="cellClass(date)"
+          :data-date="date"
+          @click="select(date)"
+        >
+          <span class="num">{{ Number(date.slice(8)) }}</span>
+          <div
+            v-for="item in (itemsByDate[date] ?? []).slice(0, MAX_IN_CELL)"
+            :key="item.id"
+            class="mi"
+            :class="{ done: item.done }"
+          >
+            {{ item.text }}
+          </div>
+          <div v-if="(itemsByDate[date]?.length ?? 0) > MAX_IN_CELL" class="more">
+            +{{ itemsByDate[date].length - MAX_IN_CELL }}
+          </div>
+        </div>
+      </div>
+    </div>
+    <aside class="side">
+      <div class="side-head">
+        <span class="side-date">{{ dateLabel(selected) }}</span>
+        <span class="tag" :class="selectedTag.cls">{{ selectedTag.text }}</span>
+      </div>
+      <div class="side-sum">
+        <template v-if="selectedCounts.done + selectedCounts.pending">
+          완료 {{ selectedCounts.done }} · 미완료 {{ selectedCounts.pending }}
+        </template>
+        <template v-else>등록된 할 일 없음</template>
+      </div>
+      <div class="side-list">
+        <TodoList
+          v-model="selectedFile.items.value"
+          list-key="overview"
+          placeholder="이 날짜에 할 일 추가"
+        />
+      </div>
+      <SaveStatusBar :status="saveStatus">
+        <button class="show-main" @click="showDateInMain(selected)">작은 창에서 보기</button>
+      </SaveStatusBar>
+    </aside>
+  </div>
+</template>
+
+<style scoped>
+.overview {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  height: 100%;
+}
+.calendar {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: auto;
+}
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+}
+.month {
+  font-size: 17px;
+  font-weight: 600;
+  min-width: 120px;
+  text-align: center;
+}
+button {
+  font: inherit;
+  color: var(--ink);
+  border: 0;
+  background: none;
+  cursor: pointer;
+}
+.nav {
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  color: var(--icon);
+  font-size: 11px;
+}
+.nav:hover {
+  background: var(--hover);
+}
+.pill {
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 1px 10px;
+  font-size: 12px;
+  color: #cfcfd4;
+}
+.summary {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+.grid {
+  flex: 1;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-rows: 28px;
+  grid-auto-rows: minmax(104px, 1fr);
+  border-top: 1px solid var(--line);
+}
+.grid .dow {
+  font-size: 11.5px;
+  color: var(--muted);
+  padding: 6px 9px;
+  border-right: 1px solid var(--line);
+  height: 28px;
+}
+.cell {
+  padding: 6px 7px;
+  border-top: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+  cursor: pointer;
+  overflow: hidden;
+  min-width: 0;
+}
+.cell:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+.num {
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: #cfcfd4;
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 50%;
+}
+.cell.today .num {
+  background: var(--accent);
+  color: #fff;
+  font-weight: 600;
+}
+.cell.sel {
+  box-shadow: inset 0 0 0 2px var(--accent);
+  background: rgba(10, 132, 255, 0.08);
+}
+.cell.past .mi,
+.cell.past .num {
+  opacity: 0.55;
+}
+.cell.out {
+  background: rgba(0, 0, 0, 0.18);
+}
+.cell.out .num {
+  opacity: 0.35;
+}
+.mi {
+  font-size: 11.5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+  padding-left: 13px;
+  position: relative;
+}
+.mi::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 5px;
+  width: 7px;
+  height: 7px;
+  border: 1.3px solid #8e8e93;
+  border-radius: 2px;
+}
+.mi.done {
+  color: #77777d;
+  text-decoration: line-through;
+}
+.mi.done::before {
+  background: #5b5b60;
+  border-color: #5b5b60;
+}
+.more {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 2px;
+  padding-left: 13px;
+}
+.side {
+  border-left: 1px solid var(--line);
+  background: #222224;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.side-head {
+  padding: 14px 14px 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.side-date {
+  font-weight: 600;
+  font-size: 15px;
+}
+.side-sum {
+  padding: 0 14px 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.side-list {
+  flex: 1;
+  overflow: auto;
+}
+.tag {
+  font-size: 11px;
+  border-radius: 4px;
+  padding: 1px 6px;
+}
+.tag.past {
+  background: rgba(255, 159, 10, 0.18);
+  color: #ff9f0a;
+}
+.tag.future,
+.tag.is-today {
+  background: rgba(10, 132, 255, 0.2);
+  color: #6cb4ff;
+}
+.show-main {
+  margin-left: auto;
+  font-size: 11px;
+  color: #6cb4ff;
+}
+</style>
