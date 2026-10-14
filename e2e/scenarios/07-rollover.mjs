@@ -70,7 +70,7 @@ export default async function (browser) {
     });
     assert.deepEqual(await texts(page, "today"), ["오늘 미리 적은 일", "14일 일", "16일 예정이던 일"]);
     const files = await fs(page);
-    assert.equal(files["daily/2026-10-14.md"], "");
+    assert.equal(files["daily/2026-10-14.md"], undefined, "다 옮겨 비게 된 날짜 파일은 지운다");
     assert.equal(files["daily/2026-10-16.md"], "- [x] 16일 끝낸 일\n");
     await context.close();
   });

@@ -99,4 +99,17 @@ export default async function (browser) {
     assert.equal(calls, 2);
     await context.close();
   });
+
+  await scenario("작은 창이 보던 날짜를 붙여 열면(#overview?date=) 달력이 뜨고 그 날짜가 골라져 있다", async () => {
+    const { page, context, errors } = await openApp(browser, {
+      hash: "#overview?date=2026-10-13",
+      viewport: { width: 1180, height: 760 },
+      files: { "daily/2026-10-13.md": "- [ ] 어제 일\n" },
+    });
+    assert.equal(await page.locator(".calendar").count(), 1, "달력이 아니라 작은 창 화면이 떴다");
+    assert.equal((await page.locator(".side-date").textContent()).trim(), "10월 13일 (화)");
+    assert.deepEqual(await texts(page, "overview"), ["어제 일"]);
+    assert.deepEqual(errors, []);
+    await context.close();
+  });
 }

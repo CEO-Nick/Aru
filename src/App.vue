@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { listen } from "@tauri-apps/api/event";
-import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, onMounted, ref, watch } from "vue";
 import DateBar from "./components/DateBar.vue";
@@ -8,22 +6,24 @@ import SaveStatusBar from "./components/SaveStatus.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import TitleBar from "./components/TitleBar.vue";
 import TodoList from "./components/TodoList.vue";
+import { watchDayChange } from "./composables/useDayWatcher";
 import { useListDrag } from "./composables/useListDrag";
 import { dayPath, rollover } from "./composables/useRollover";
 import { useSettings } from "./composables/useSettings";
 import { useTodoFile } from "./composables/useTodoFile";
-import { AutoSaver, type SaveStatus } from "./core/autoSaver";
+import { useSaveIndicator } from "./composables/useSaveIndicator";
+import { AutoSaver } from "./core/autoSaver";
 import { toIsoDate } from "./core/date";
 import { splitRatio } from "./core/layout";
 import { sliderToAlpha } from "./core/opacity";
 import { getDataRoot, onDataRootChanged, pickDataRoot, revealDataRoot } from "./platform/dataRoot";
 import { onFileChanged, onShowDate, openOverview } from "./platform/events";
+import { onQuitRequested } from "./platform/lifecycle";
 import { tauriStore } from "./platform/tauriStore";
 import { tauriWindow } from "./platform/tauriWindow";
 
 const saver = new AutoSaver(tauriStore);
-const saveStatus = ref<SaveStatus>("saved");
-saver.onStatus((s) => (saveStatus.value = s));
+const { status: saveStatus, savedAt } = useSaveIndicator(saver);
 
 const { settings, load: loadSettings } = useSettings(tauriStore, saver);
 
@@ -51,8 +51,9 @@ async function checkDayChange() {
   if (now === today.value || checking) return;
   checking = true;
   try {
-    const wasViewingToday = viewDate.value === today.value;
-    await rollover(now, settings, tauriStore, saver, somedayItems);
+    const previous = today.value;
+    const wasViewingToday = viewDate.value === previous;
+    await rollover(now, settings, tauriStore, saver, somedayItems, previous);
     today.value = now;
     if (wasViewingToday) viewDate.value = now;
     else await dayFile.load();
@@ -75,7 +76,7 @@ async function changeFolder() {
 }
 
 function openCalendar() {
-  void openOverview();
+  void openOverview(viewDate.value);
 }
 
 const drag = useListDrag({ today: todayItems, someday: somedayItems });
@@ -88,20 +89,26 @@ function startSplit(event: PointerEvent) {
     const rect = body.value!.getBoundingClientRect();
     settings.value.splitRatio = splitRatio(e.clientY, rect.top, rect.height);
   };
-  const onUp = () => {
+  const onEnd = () => {
     document.body.classList.remove("resizing");
     window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointerup", onEnd);
+    window.removeEventListener("pointercancel", onEnd);
   };
   document.body.classList.add("resizing");
   window.addEventListener("pointermove", onMove);
-  window.addEventListener("pointerup", onUp);
+  window.addEventListener("pointerup", onEnd);
+  window.addEventListener("pointercancel", onEnd);
 }
 
-watch(
-  () => settings.value.opacity,
-  (value) => void tauriWindow.setOpacity(sliderToAlpha(value)),
-);
+// 창을 오갈 때마다 읽지 않도록 2초에 한 번으로 묶는다
+let lastReload = 0;
+function reloadFiles() {
+  if (Date.now() - lastReload < 2000) return;
+  lastReload = Date.now();
+  void dayFile.reloadIfChanged();
+  void somedayFile.reloadIfChanged();
+}
 
 onMounted(async () => {
   await Promise.all([loadSettings(), somedayFile.load()]);
@@ -111,18 +118,18 @@ onMounted(async () => {
   if (!settings.value.alwaysOnTop) void tauriWindow.setAlwaysOnTop(false);
 
   window.addEventListener("blur", () => void saver.flush());
-  // 잠자기에서 깨어나면 타이머가 늦게 돌 수 있어서 창이 다시 활성화될 때도 날짜를 확인한다
-  setInterval(() => void checkDayChange(), 30_000);
-  window.addEventListener("focus", () => {
-    void checkDayChange();
-    void dayFile.reloadIfChanged();
-    void somedayFile.reloadIfChanged();
-  });
+  watchDayChange(() => void checkDayChange());
+  window.addEventListener("focus", reloadFiles);
+  // 항상 떠 있는 창이라 클릭하지 않아도 다른 편집기에서 고친 내용이 보여야 한다
+  setInterval(reloadFiles, 15_000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) void saver.flush();
   });
-  await getCurrentWindow().onCloseRequested(async () => {
+  // 작은 창을 닫으면 앱을 끄지 않고 숨긴다. 메뉴 막대 아이콘이나 Dock 아이콘으로 다시 연다
+  await getCurrentWindow().onCloseRequested(async (event) => {
+    event.preventDefault();
     await saver.flush();
+    await getCurrentWindow().hide();
   });
   await onFileChanged(({ path }) => {
     if (path === dayFile.path.value) void dayFile.reloadIfChanged();
@@ -130,14 +137,14 @@ onMounted(async () => {
   });
   // 저장 폴더가 바뀌면 모든 걸 새 폴더에서 다시 읽는다
   await onDataRootChanged(() => location.reload());
-  await onShowDate((date) => {
+  await onShowDate(async (date) => {
     viewDate.value = date;
-    void getCurrentWindow().show();
+    const win = getCurrentWindow();
+    await win.unminimize();
+    await win.show();
+    await win.setFocus();
   });
-  await listen("quit-requested", async () => {
-    await saver.flush();
-    await invoke("exit_app");
-  });
+  await onQuitRequested(() => saver.flush());
 });
 </script>
 
@@ -184,7 +191,7 @@ onMounted(async () => {
         />
       </section>
     </main>
-    <SaveStatusBar :status="saveStatus" />
+    <SaveStatusBar :status="saveStatus" :saved-at="savedAt" />
   </div>
 </template>
 

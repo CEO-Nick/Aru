@@ -3,28 +3,33 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import SaveStatusBar from "./components/SaveStatus.vue";
 import TodoList from "./components/TodoList.vue";
+import { watchDayChange } from "./composables/useDayWatcher";
+import { useListDrag } from "./composables/useListDrag";
 import { dayPath } from "./composables/useRollover";
 import { useTodoFile } from "./composables/useTodoFile";
-import { AutoSaver, type SaveStatus } from "./core/autoSaver";
+import { useSaveIndicator } from "./composables/useSaveIndicator";
+import { AutoSaver } from "./core/autoSaver";
 import { addMonths, monthGrid, monthLabel, monthSummary } from "./core/calendar";
 import { toIsoDate } from "./core/date";
 import { dateLabel } from "./core/format";
 import { parseItems } from "./core/todoFile";
 import type { TodoItem } from "./core/todoList";
 import { onDataRootChanged } from "./platform/dataRoot";
-import { onFileChanged, showDateInMain } from "./platform/events";
+import { onFileChanged, onSelectDate, showDateInMain } from "./platform/events";
+import { onQuitRequested } from "./platform/lifecycle";
 import { tauriStore } from "./platform/tauriStore";
 
 const MAX_IN_CELL = 3;
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
 const saver = new AutoSaver(tauriStore);
-const saveStatus = ref<SaveStatus>("saved");
-saver.onStatus((s) => (saveStatus.value = s));
+const { status: saveStatus, savedAt } = useSaveIndicator(saver);
 
 const today = ref(toIsoDate(new Date()));
-const month = ref(today.value.slice(0, 7));
-const selected = ref(today.value);
+// 작은 창이 보던 날짜를 #overview?date=YYYY-MM-DD 로 넘겨준다
+const initialDate = new URLSearchParams(location.hash.split("?")[1] ?? "").get("date");
+const selected = ref(initialDate && /^\d{4}-\d{2}-\d{2}$/.test(initialDate) ? initialDate : today.value);
+const month = ref(selected.value.slice(0, 7));
 const grid = computed(() => monthGrid(month.value));
 const itemsByDate = reactive<Record<string, TodoItem[]>>({});
 const summary = computed(() => monthSummary(month.value, itemsByDate));
@@ -40,8 +45,9 @@ async function readDay(date: string) {
   itemsByDate[date] = parseItems(content ?? "", () => crypto.randomUUID()).items;
 }
 
+// 고른 날짜 칸은 오른쪽 목록(저장 전 내용 포함)이 맡는다
 async function loadMonth() {
-  await Promise.all(grid.value.map(readDay));
+  await Promise.all(grid.value.filter((date) => date !== selected.value).map(readDay));
 }
 
 watch(month, () => void loadMonth());
@@ -51,6 +57,8 @@ watch(selected, async () => {
 });
 // 오른쪽에서 고친 내용을 달력 칸에 바로 반영한다
 watch(selectedFile.items, (items) => (itemsByDate[selected.value] = items));
+
+const drag = useListDrag({ overview: selectedFile.items });
 
 function select(date: string) {
   selected.value = date;
@@ -87,13 +95,20 @@ const selectedCounts = computed(() => {
 
 onMounted(async () => {
   await Promise.all([loadMonth(), selectedFile.load()]);
-  setInterval(() => (today.value = toIsoDate(new Date())), 60_000);
+  watchDayChange(() => (today.value = toIsoDate(new Date())));
   window.addEventListener("blur", () => void saver.flush());
-  window.addEventListener("focus", () => {
-    today.value = toIsoDate(new Date());
+  // 창을 오갈 때마다 한 달 치를 읽지 않도록 2초에 한 번으로 묶는다
+  let lastRefresh = 0;
+  const refresh = () => {
+    if (Date.now() - lastRefresh < 2000) return;
+    lastRefresh = Date.now();
     void selectedFile.reloadIfChanged();
     void loadMonth();
-  });
+  };
+  window.addEventListener("focus", refresh);
+  setInterval(refresh, 15_000);
+  await onSelectDate((date) => select(date));
+  await onQuitRequested(() => saver.flush());
   await onFileChanged(({ path }) => {
     if (path === selectedFile.path.value) void selectedFile.reloadIfChanged();
     const date = path.match(/^daily\/(\d{4}-\d{2}-\d{2})\.md$/)?.[1];
@@ -157,9 +172,12 @@ onMounted(async () => {
           v-model="selectedFile.items.value"
           list-key="overview"
           placeholder="이 날짜에 할 일 추가"
+          :marker="drag.state.marker"
+          :dragging-id="drag.state.draggingId"
+          @drag-start="(id, e) => drag.start('overview', id, e)"
         />
       </div>
-      <SaveStatusBar :status="saveStatus">
+      <SaveStatusBar :status="saveStatus" :saved-at="savedAt">
         <button class="show-main" @click="showDateInMain(selected)">작은 창에서 보기</button>
       </SaveStatusBar>
     </aside>

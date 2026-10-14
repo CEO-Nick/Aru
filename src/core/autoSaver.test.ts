@@ -110,4 +110,24 @@ describe("AutoSaver", () => {
     expect(writes).toEqual(["가"]);
     expect(seen.at(-1)).toBe("saved");
   });
+
+  it("쓰기에 실패하면 5초 뒤 스스로 다시 시도한다", async () => {
+    let fail = true;
+    const writes: string[] = [];
+    const store: FileStore = {
+      read: async () => null,
+      write: async (_path, content) => {
+        if (fail) throw new Error("잠깐 실패");
+        writes.push(content);
+      },
+    };
+    const saver = new AutoSaver(store);
+    saver.schedule("someday.md", "가", "now");
+    await vi.advanceTimersByTimeAsync(0);
+    fail = false;
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(writes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(writes).toEqual(["가"]);
+  });
 });

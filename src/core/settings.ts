@@ -21,14 +21,27 @@ export const DEFAULT_SETTINGS: Settings = {
 
 const CARRY_OVERS: CarryOver[] = ["keep", "next-day", "someday"];
 
+const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+const isNumber = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/** 사람이 손으로 고치거나 다른 버전이 쓴 설정 파일도 있으므로 값마다 형식을 확인한다 */
 export function parseSettings(json: string | null): Settings {
-  let raw: Partial<Settings> = {};
+  let raw: unknown = null;
   try {
-    raw = json ? JSON.parse(json) : {};
+    raw = json ? JSON.parse(json) : null;
   } catch {
-    raw = {};
+    raw = null;
   }
-  const merged = { ...DEFAULT_SETTINGS, ...raw };
-  if (!CARRY_OVERS.includes(merged.carryOver)) merged.carryOver = DEFAULT_SETTINGS.carryOver;
-  return merged;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { ...DEFAULT_SETTINGS };
+  const r = raw as Record<string, unknown>;
+  const d = DEFAULT_SETTINGS;
+  return {
+    opacity: isNumber(r.opacity) ? clamp(r.opacity, 0, 100) : d.opacity,
+    splitRatio: isNumber(r.splitRatio) ? clamp(r.splitRatio, 0.2, 0.8) : d.splitRatio,
+    alwaysOnTop: typeof r.alwaysOnTop === "boolean" ? r.alwaysOnTop : d.alwaysOnTop,
+    carryOver: CARRY_OVERS.includes(r.carryOver as CarryOver) ? (r.carryOver as CarryOver) : d.carryOver,
+    lastRolloverDate:
+      typeof r.lastRolloverDate === "string" && ISO_DATE.test(r.lastRolloverDate) ? r.lastRolloverDate : null,
+  };
 }

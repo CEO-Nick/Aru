@@ -18,3 +18,25 @@ describe("parseSettings", () => {
     expect(parseSettings('{"carryOver": "???"}').carryOver).toBe(DEFAULT_SETTINGS.carryOver);
   });
 });
+
+describe("parseSettings: 이상한 값 바로잡기", () => {
+  it("숫자가 아니거나 범위를 벗어난 값은 기본값이나 범위 안으로 고친다", () => {
+    const s = parseSettings(
+      JSON.stringify({ opacity: "abc", splitRatio: 5, alwaysOnTop: "yes", lastRolloverDate: "어제" }),
+    );
+    expect(s.opacity).toBe(DEFAULT_SETTINGS.opacity);
+    expect(s.splitRatio).toBe(0.8);
+    expect(s.alwaysOnTop).toBe(DEFAULT_SETTINGS.alwaysOnTop);
+    expect(s.lastRolloverDate).toBeNull();
+  });
+
+  it("투명도는 0~100 안으로 자른다", () => {
+    expect(parseSettings('{"opacity": 250}').opacity).toBe(100);
+    expect(parseSettings('{"opacity": -3}').opacity).toBe(0);
+  });
+
+  it("JSON이 객체가 아니면 기본값이다", () => {
+    expect(parseSettings("[1,2]")).toEqual(DEFAULT_SETTINGS);
+    expect(parseSettings("null")).toEqual(DEFAULT_SETTINGS);
+  });
+});

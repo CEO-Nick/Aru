@@ -159,4 +159,55 @@ describe("TodoList", () => {
 
     expect(wrapper.find(".add").classes("drop-before")).toBe(true);
   });
+
+  it("↓ 는 다음 항목으로, 마지막 항목에서는 입력칸으로 커서를 옮긴다", async () => {
+    const wrapper = mountList([
+      { id: "a", text: "하나", done: false },
+      { id: "b", text: "둘", done: false },
+    ]);
+    const texts = wrapper.findAll(".item .text");
+    (texts[0].element as HTMLElement).focus();
+    await texts[0].trigger("keydown", { key: "ArrowDown" });
+    expect(document.activeElement).toBe(texts[1].element);
+    await texts[1].trigger("keydown", { key: "ArrowDown" });
+    expect(document.activeElement).toBe(wrapper.find(".add input").element);
+  });
+
+  it("↑ 는 이전 항목으로, 입력칸에서는 마지막 항목으로 커서를 옮긴다", async () => {
+    const wrapper = mountList([
+      { id: "a", text: "하나", done: false },
+      { id: "b", text: "둘", done: false },
+    ]);
+    const input = wrapper.find(".add input");
+    await input.trigger("keydown", { key: "ArrowUp" });
+    const texts = wrapper.findAll(".item .text");
+    expect(document.activeElement).toBe(texts[1].element);
+    await texts[1].trigger("keydown", { key: "ArrowUp" });
+    expect(document.activeElement).toBe(texts[0].element);
+  });
+
+  it("여러 줄을 붙여넣으면 첫 줄은 지금 항목에, 나머지는 아래 새 항목으로 들어간다", async () => {
+    const wrapper = mountList([
+      { id: "a", text: "하나", done: false },
+      { id: "z", text: "끝", done: false },
+    ]);
+    const text = wrapper.find(".item .text");
+    const event = new Event("paste", { bubbles: true, cancelable: true }) as ClipboardEvent;
+    Object.defineProperty(event, "clipboardData", {
+      value: { getData: () => " 붙임\n둘째\r\n\n셋째\n" },
+    });
+    text.element.dispatchEvent(event);
+    await wrapper.vm.$nextTick();
+    expect(event.defaultPrevented).toBe(true);
+    expect(current(wrapper).map((t) => t.text)).toEqual(["하나 붙임", "둘째", "셋째", "끝"]);
+  });
+
+  it("어떤 경로로든 글자에 줄바꿈이 들어가면 공백으로 바꾼다", async () => {
+    const wrapper = mountList([{ id: "a", text: "하나", done: false }]);
+    const text = wrapper.find(".item .text");
+    text.element.textContent = "하나\n둘";
+    await text.trigger("input");
+    expect(current(wrapper)[0].text).toBe("하나 둘");
+    expect(text.element.textContent).toBe("하나 둘");
+  });
 });

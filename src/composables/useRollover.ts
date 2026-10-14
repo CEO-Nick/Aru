@@ -12,6 +12,7 @@ export const dayPath = (date: string) => `daily/${date}.md`;
 /**
  * 마지막으로 처리한 날부터 오늘 전날까지의 미완료 항목을 설정대로 옮긴다.
  * 자정을 넘길 때와 앱을 켤 때(며칠 꺼져 있었을 수 있다) 부른다.
+ * previousDay: 자정 전환이면 방금까지의 오늘. 기록된 날짜를 믿을 수 없을 때 대신 쓴다.
  */
 export async function rollover(
   today: string,
@@ -19,9 +20,12 @@ export async function rollover(
   store: FileStore,
   saver: AutoSaver,
   someday: Ref<TodoItem[]>,
+  previousDay?: string,
 ) {
-  const last = settings.value.lastRolloverDate;
-  if (last && last >= today) return;
+  let last = settings.value.lastRolloverDate;
+  if (last === today) return;
+  // 기록이 미래면(시계를 되돌렸거나 시차 있는 컴퓨터와 폴더를 함께 씀) 믿지 않는다
+  if (last && last > today) last = previousDay && previousDay < today ? previousDay : null;
   if (!last || settings.value.carryOver === "keep") {
     settings.value.lastRolloverDate = today;
     return;

@@ -1,6 +1,7 @@
 import { ref, watch, type Ref } from "vue";
 import type { AutoSaver } from "../core/autoSaver";
 import { saveModeFor } from "../core/changeKind";
+import { mergeContent } from "../core/merge";
 import { dumpItems, parseItems } from "../core/todoFile";
 import type { TodoItem } from "../core/todoList";
 import type { FileStore } from "../platform/fileStore";
@@ -9,20 +10,27 @@ const newId = () => crypto.randomUUID();
 
 /**
  * 마크다운 파일 하나와 화면 목록 하나를 잇는다. 목록이 바뀌면 자동저장에 넘기고,
- * 다른 편집기에서 파일이 바뀌었으면 다시 읽는다.
+ * 다른 창·편집기에서 파일이 바뀌었으면 다시 읽는다. 저장 전인 내 변경이 있으면 합친다.
  */
 export function useTodoFile(path: Ref<string>, store: FileStore, saver: AutoSaver) {
   const items = ref<TodoItem[]>([]);
   const loaded = ref(false);
   let notes = "";
-  let lastKnown: string | null = null;
+  /** 마지막으로 파일과 맞춰 본 내용. 파일이 없으면 "" */
+  let lastKnown = "";
   let applying = false;
 
-  function apply(content: string | null) {
+  // 다시 읽어도 같은 항목은 id를 유지한다. 바뀌면 고치던 칸의 커서가 날아간다
+  function apply(content: string) {
     applying = true;
-    lastKnown = content;
-    const parsed = parseItems(content ?? "", newId);
-    items.value = parsed.items;
+    const parsed = parseItems(content, newId);
+    const pool = [...items.value];
+    items.value = parsed.items.map((item) => {
+      const i = pool.findIndex(
+        (old) => old.text === item.text && old.done === item.done && old.from === item.from,
+      );
+      return i === -1 ? item : { ...item, id: pool.splice(i, 1)[0].id };
+    });
     notes = parsed.notes;
     loaded.value = true;
     queueMicrotask(() => (applying = false));
@@ -30,22 +38,31 @@ export function useTodoFile(path: Ref<string>, store: FileStore, saver: AutoSave
 
   async function load() {
     loaded.value = false;
-    apply(await store.read(path.value));
+    items.value = [];
+    lastKnown = (await store.read(path.value)) ?? "";
+    apply(lastKnown);
   }
 
   async function reloadIfChanged() {
-    // 아직 쓰지 않은 내 변경이 있으면 밖의 내용으로 덮지 않는다
-    if (!loaded.value || saver.hasPending(path.value)) return;
-    const content = await store.read(path.value);
-    if (content !== lastKnown) apply(content);
+    if (!loaded.value) return;
+    const target = path.value;
+    const content = (await store.read(target)) ?? "";
+    if (target !== path.value || content === lastKnown) return;
+    if (!saver.hasPending(target)) {
+      lastKnown = content;
+      apply(content);
+      return;
+    }
+    const merged = mergeContent(lastKnown, dumpItems(items.value, notes), content);
+    lastKnown = merged;
+    apply(merged);
+    saver.schedule(target, merged, "now");
   }
 
   watch(items, (next, prev) => {
     if (applying || !loaded.value) return;
     const content = dumpItems(next, notes);
     if (content === lastKnown) return;
-    // 한 번도 저장된 적 없는 날짜를 비어 있는 채로 파일로 만들지 않는다
-    if (content === "" && lastKnown === null) return;
     lastKnown = content;
     saver.schedule(path.value, content, saveModeFor(prev, next));
   });

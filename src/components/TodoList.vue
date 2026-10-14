@@ -64,7 +64,83 @@ function isPlainEnter(event: KeyboardEvent) {
   return event.key === "Enter" && !event.isComposing && event.keyCode !== 229;
 }
 
+// 줄이 접혀 여러 줄로 보이는 항목에서는 첫 줄·마지막 줄에서만 다른 항목으로 넘어간다
+function caretOnEdgeLine(el: HTMLElement, edge: "first" | "last") {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return true;
+  const caret = selection.getRangeAt(0).getBoundingClientRect?.();
+  if (!caret || caret.height === 0) return true;
+  const box = el.getBoundingClientRect();
+  return edge === "first" ? caret.top - box.top < caret.height : box.bottom - caret.bottom < caret.height;
+}
+
+function focusAddInput() {
+  const input = addRow.value?.querySelector("input");
+  input?.focus();
+  reveal(addRow.value);
+}
+
+function onArrow(event: KeyboardEvent, item: TodoItem | null) {
+  const index = item ? items.value.findIndex((t) => t.id === item.id) : items.value.length;
+  if (event.key === "ArrowUp") {
+    const el = item ? textOf(item.id) : undefined;
+    if ((el && !caretOnEdgeLine(el, "first")) || index === 0) return;
+    event.preventDefault();
+    focusItem(items.value[index - 1].id);
+  } else if (item) {
+    const el = textOf(item.id);
+    if (el && !caretOnEdgeLine(el, "last")) return;
+    event.preventDefault();
+    const next = items.value[index + 1];
+    if (next) focusItem(next.id);
+    else focusAddInput();
+  }
+}
+
+function onItemInput(event: Event, item: TodoItem) {
+  const el = event.target as HTMLElement;
+  let text = el.textContent ?? "";
+  if (/[\r\n]/.test(text)) {
+    text = text.replace(/\r?\n/g, " ");
+    el.textContent = text;
+    caretToEnd(el);
+  }
+  items.value = updateText(items.value, item.id, text);
+}
+
+// 여러 줄을 붙여넣으면 첫 줄은 지금 항목에 이어 붙이고, 나머지 줄은 각각 새 항목으로 만든다
+function onItemPaste(event: ClipboardEvent, item: TodoItem) {
+  const pasted = event.clipboardData?.getData("text/plain") ?? "";
+  if (!/[\r\n]/.test(pasted)) return;
+  event.preventDefault();
+  const [first, ...rest] = pasted.split(/\r?\n/);
+  const el = textOf(item.id);
+  if (el) insertAtCaret(el, first);
+  let list = updateText(items.value, item.id, el?.textContent ?? item.text + first);
+  let after = item.id;
+  for (const line of rest.map((l) => l.trim()).filter(Boolean)) {
+    const created = newItem(line);
+    list = insertAfter(list, after, created);
+    after = created.id;
+  }
+  items.value = list;
+  focusItem(after);
+}
+
+function insertAtCaret(el: HTMLElement, text: string) {
+  const selection = window.getSelection();
+  const range = selection?.rangeCount ? selection.getRangeAt(0) : null;
+  if (range && el.contains(range.startContainer)) {
+    range.deleteContents();
+    range.insertNode(document.createTextNode(text));
+    el.normalize();
+  } else {
+    el.textContent = (el.textContent ?? "") + text;
+  }
+}
+
 async function onAddKeydown(event: KeyboardEvent) {
+  if (event.key === "ArrowUp") return onArrow(event, null);
   if (!isPlainEnter(event)) return;
   const text = draft.value.trim();
   if (!text) return;
@@ -75,7 +151,9 @@ async function onAddKeydown(event: KeyboardEvent) {
 }
 
 function onItemKeydown(event: KeyboardEvent, item: TodoItem) {
-  if (isPlainEnter(event)) {
+  if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+    onArrow(event, item);
+  } else if (isPlainEnter(event)) {
     event.preventDefault();
     const created = newItem("");
     items.value = insertAfter(items.value, item.id, created);
@@ -123,7 +201,8 @@ const vEditableText: Directive<HTMLElement, string> = {
         class="text"
         :data-id="item.id"
         contenteditable="plaintext-only"
-        @input="items = updateText(items, item.id, ($event.target as HTMLElement).textContent ?? '')"
+        @input="onItemInput($event, item)"
+        @paste="onItemPaste($event, item)"
         @keydown="onItemKeydown($event, item)"
       ></span>
       <span

@@ -14,4 +14,7 @@ export const showDateInMain = (date: string) => emit("show-date", date);
 export const onShowDate = (cb: (date: string) => void) =>
   listen<string>("show-date", (event) => cb(event.payload));
 
-export const openOverview = () => invoke("open_overview");
+export const openOverview = (date?: string) => invoke("open_overview", { date });
+
+export const onSelectDate = (cb: (date: string) => void) =>
+  listen<string>("select-date", (event) => cb(event.payload));

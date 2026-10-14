@@ -4,6 +4,7 @@ export type SaveMode = "debounce" | "now";
 export type SaveStatus = "saved" | "pending" | "error";
 
 const DEBOUNCE_MS = 1000;
+const RETRY_MS = 5000;
 
 export class AutoSaver {
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -51,7 +52,13 @@ export class AutoSaver {
       await this.store.write(path, content);
     } catch {
       // 그 사이 새 내용이 들어오지 않았다면 다음 flush에서 다시 쓰도록 되돌려 둔다
-      if (!this.pending.has(path)) this.pending.set(path, content);
+      if (!this.pending.has(path)) {
+        this.pending.set(path, content);
+        this.timers.set(
+          path,
+          setTimeout(() => void this.save(path), RETRY_MS),
+        );
+      }
       this.emit("error");
       return;
     }

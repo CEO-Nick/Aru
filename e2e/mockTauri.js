@@ -30,7 +30,8 @@
           return window.__mockFs[args.path] ?? null;
         case "write_text":
           if (window.__failWrites) throw "디스크 오류(모의)";
-          window.__mockFs[args.path] = args.content;
+          if (args.content === "") delete window.__mockFs[args.path];
+          else window.__mockFs[args.path] = args.content;
           window.__writes.push([args.path, args.content]);
           persist();
           setTimeout(() => window.__emit("file-changed", { path: args.path, source: "self" }));

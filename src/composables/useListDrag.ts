@@ -35,6 +35,17 @@ export function useListDrag(lists: Record<string, Ref<TodoItem[]>>) {
     state.marker = markerAt(event.clientX, event.clientY);
   }
 
+  function end() {
+    state.draggingId = null;
+    state.sourceKey = null;
+    state.marker = null;
+    document.body.classList.remove("dragging");
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    window.removeEventListener("pointercancel", end);
+    window.removeEventListener("keydown", onKey, true);
+  }
+
   function onUp() {
     const { draggingId, sourceKey, marker } = state;
     if (draggingId && sourceKey && marker) {
@@ -42,16 +53,19 @@ export function useListDrag(lists: Record<string, Ref<TodoItem[]>>) {
       const target = lists[marker.listKey];
       if (marker.listKey === sourceKey) {
         source.value = moveBefore(source.value, draggingId, marker.beforeId);
-      } else {
+      } else if (target) {
         [source.value, target.value] = transfer(source.value, target.value, draggingId, marker.beforeId);
       }
     }
-    state.draggingId = null;
-    state.sourceKey = null;
-    state.marker = null;
-    document.body.classList.remove("dragging");
-    window.removeEventListener("pointermove", onMove);
-    window.removeEventListener("pointerup", onUp);
+    end();
+  }
+
+  // Esc로 드래그를 취소한다. 목록은 그대로 둔다
+  function onKey(event: KeyboardEvent) {
+    if (event.key !== "Escape") return;
+    event.preventDefault();
+    event.stopPropagation();
+    end();
   }
 
   function start(listKey: string, id: string, event: PointerEvent) {
@@ -61,6 +75,8 @@ export function useListDrag(lists: Record<string, Ref<TodoItem[]>>) {
     document.body.classList.add("dragging");
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", end);
+    window.addEventListener("keydown", onKey, true);
   }
 
   return { state, start };

@@ -23,8 +23,13 @@ export function useSettings(store: FileStore, saver: AutoSaver) {
       if (baseline === null) return;
       const content = serialize(value);
       if (content === baseline) return;
+      const before = JSON.parse(baseline) as Settings;
       baseline = content;
-      saver.schedule(SETTINGS_PATH, content, "debounce");
+      // 슬라이더·손잡이처럼 끌면서 계속 바뀌는 값만 기다렸다 쓴다
+      const dragging = (Object.keys(value) as (keyof Settings)[]).every(
+        (key) => key === "opacity" || key === "splitRatio" || value[key] === before[key],
+      );
+      saver.schedule(SETTINGS_PATH, content, dragging ? "debounce" : "now");
     },
     { deep: true },
   );

@@ -93,7 +93,7 @@ export default async function (browser) {
     await page.clock.runFor(10);
     const calls = await page.evaluate(() => window.__calls.map(([c]) => c));
     assert.equal((await fs(page))[TODAY], "- [ ] 장보기!\n");
-    assert.ok(calls.indexOf("exit_app") > calls.lastIndexOf("write_text"), "저장 전에 종료했다");
+    assert.ok(calls.indexOf("quit_ready") > calls.lastIndexOf("write_text"), "저장 전에 종료 준비를 알렸다");
     await context.close();
   });
 
@@ -103,7 +103,8 @@ export default async function (browser) {
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.clock.runFor(10);
     assert.deepEqual(await texts(page, "today"), ["하나", "밖에서 추가"]);
-    assert.equal((await writes(page)).length, 0, "다시 읽은 내용을 괜히 다시 썼다");
+    const rewrites = (await writes(page)).filter(([p]) => p === TODAY);
+    assert.equal(rewrites.length, 0, `다시 읽은 내용을 괜히 다시 썼다: ${JSON.stringify(await writes(page))}`);
     await context.close();
   });
 
@@ -168,6 +169,40 @@ export default async function (browser) {
     await page.clock.runFor(10);
     assert.equal((await fs(page))[TODAY], "- [ ] 장보기\n");
     assert.equal(await page.locator(".status").textContent(), "저장됨");
+    await context.close();
+  });
+
+  await scenario("Cmd+S를 누르면 기다리지 않고 바로 저장되고, 저장 표시가 반짝이며 시각이 붙는다", async () => {
+    const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 장보기\n" } });
+    await page.locator('[data-list="today"] .item .text').click();
+    await page.keyboard.press("End");
+    await page.keyboard.type(" 우유");
+    await page.keyboard.press("Meta+s");
+    await page.clock.runFor(10);
+    assert.equal((await fs(page))[TODAY], "- [ ] 장보기 우유\n");
+    assert.ok(await page.locator(".foot").evaluate((e) => e.classList.contains("flash")), "반짝이지 않는다");
+    assert.equal(await page.locator(".foot .time").textContent(), "10:00");
+    await page.clock.runFor(1300);
+    assert.ok(!(await page.locator(".foot").evaluate((e) => e.classList.contains("flash"))));
+    await context.close();
+  });
+
+  await scenario("저장할 게 없어도 Cmd+S를 누르면 저장 표시가 반짝여 눌렀다는 걸 알려 준다", async () => {
+    const { page, context } = await openApp(browser);
+    await page.clock.runFor(2000);
+    await page.keyboard.press("Meta+s");
+    await page.clock.runFor(10);
+    assert.ok(await page.locator(".foot").evaluate((e) => e.classList.contains("flash")));
+    await context.close();
+  });
+
+  await scenario("자동저장이 끝날 때도 저장 표시가 반짝인다", async () => {
+    const { page, context } = await openApp(browser);
+    await page.clock.runFor(2000);
+    await page.locator('[data-list="today"] .add input').fill("장보기");
+    await page.locator('[data-list="today"] .add input').press("Enter");
+    await page.clock.runFor(10);
+    assert.ok(await page.locator(".foot").evaluate((e) => e.classList.contains("flash")));
     await context.close();
   });
 }

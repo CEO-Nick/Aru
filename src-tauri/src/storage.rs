@@ -11,9 +11,16 @@ pub fn read_text(root: &Path, rel: &str) -> Result<Option<String>, String> {
     }
 }
 
-/// 임시 파일에 다 쓴 뒤 이름을 바꿔 교체한다. 쓰는 도중 앱이 꺼져도 원래 파일은 온전하다
+/// 임시 파일에 다 쓴 뒤 이름을 바꿔 교체한다. 쓰는 도중 앱이 꺼져도 원래 파일은 온전하다.
+/// 내용이 비면 빈 파일을 남기지 않고 지운다
 pub fn write_text(root: &Path, rel: &str, content: &str) -> Result<(), String> {
     let path = resolve(root, rel)?;
+    if content.is_empty() {
+        return match fs::remove_file(&path) {
+            Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
+            _ => Ok(()),
+        };
+    }
     if let Some(parent) = path.parent() {
         fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -116,6 +123,15 @@ mod tests {
 
         assert!(!copy_into_if_empty(&from, &to).unwrap());
         assert_eq!(read_text(&to, "someday.md").unwrap().as_deref(), Some("- [ ] 저기 것\n"));
+    }
+
+    #[test]
+    fn 빈_내용을_쓰면_파일을_지운다() {
+        let root = temp_root("empty");
+        write_text(&root, "daily/2026-10-14.md", "- [ ] 하나\n").unwrap();
+        write_text(&root, "daily/2026-10-14.md", "").unwrap();
+        assert!(!root.join("daily/2026-10-14.md").exists());
+        write_text(&root, "daily/2026-10-15.md", "").unwrap();
     }
 
     #[test]

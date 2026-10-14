@@ -122,3 +122,44 @@ describe("parseTodos", () => {
     ]);
   });
 });
+
+describe("버그 수정: 형식", () => {
+  it("끝 공백이 없는 빈 할 일 줄('- [ ]')도 할 일로 읽는다", () => {
+    expect(parseTodos("- [ ]\n- [x]\n")).toEqual([
+      { text: "", done: false },
+      { text: "", done: true },
+    ]);
+  });
+
+  it("할 일 바로 아래 들여쓴 줄(하위 할 일)은 그 할 일에 붙어 다니며 자리를 지킨다", () => {
+    const md = "- [ ] 상위\n  - [ ] 하위\n  메모\n- [ ] 다음\n";
+    const doc = parseDocument(md);
+    expect(doc.todos[0].children).toEqual(["  - [ ] 하위", "  메모"]);
+    expect(doc.notes).toBe("");
+    doc.todos[1].done = true;
+    expect(serializeDocument(doc)).toBe("- [ ] 상위\n  - [ ] 하위\n  메모\n- [x] 다음\n");
+  });
+
+  it("첫 할 일보다 앞에 있거나 빈 줄 뒤에 있는 들여쓴 줄은 메모다", () => {
+    const doc = parseDocument("  앞 메모\n- [ ] 하나\n\n  떨어진 메모\n");
+    expect(doc.todos).toEqual([{ text: "하나", done: false }]);
+    expect(doc.notes).toBe("  앞 메모\n\n  떨어진 메모");
+  });
+
+  it("글자가 넘어온 날짜 주석처럼 끝나도 다시 읽으면 글자가 그대로다", () => {
+    const todo = { text: "주석 예시 <!-- from:2026-01-01 -->", done: false };
+    expect(parseTodos(serializeTodos([todo]))).toEqual([todo]);
+    const moved = { ...todo, from: "2026-10-12" };
+    expect(parseTodos(serializeTodos([moved]))).toEqual([moved]);
+  });
+
+  it("글자가 비었거나 공백뿐인 항목은 파일에 쓰지 않는다", () => {
+    expect(
+      serializeTodos([
+        { text: "", done: false },
+        { text: "   ", done: false },
+        { text: "하나", done: false },
+      ]),
+    ).toBe("- [ ] 하나\n");
+  });
+});
