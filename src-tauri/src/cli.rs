@@ -1,7 +1,7 @@
 //! 터미널·AI 도구에서 할 일을 넣고 보는 명령(`aru add`, `aru list`)과 MCP 서버(`aru mcp`).
 //! 앱이 켜져 있지 않아도 저장 폴더의 마크다운 파일에 직접 쓴다. 켜져 있는 앱은 바뀐 파일을 다시 읽어 합친다.
 
-use crate::storage;
+use crate::{license, storage};
 use serde_json::{json, Value};
 use std::io::{BufRead, Write};
 use std::path::PathBuf;
@@ -176,7 +176,7 @@ pub fn sanitize_tool(name: &str) -> String {
     if cleaned.is_empty() { "ai".into() } else { cleaned }
 }
 
-fn today() -> String {
+pub fn today() -> String {
     std::process::Command::new("date")
         .arg("+%Y-%m-%d")
         .output()
@@ -203,7 +203,7 @@ fn home() -> PathBuf {
 }
 
 /// 앱의 설정 폴더와 기본 저장 폴더. 맥에서는 같은 곳이다
-fn app_dirs() -> (PathBuf, PathBuf) {
+pub fn app_dirs() -> (PathBuf, PathBuf) {
     #[cfg(target_os = "macos")]
     {
         let base = home().join("Library/Application Support").join(IDENTIFIER);
@@ -256,6 +256,11 @@ fn log_batch(by: &str, at: u64, path: &str, count: usize) {
     let _ = std::fs::write(file, next);
 }
 
+/// 앱과 같은 기준의 라이선스 상태
+pub fn license_status() -> license::Status {
+    license::status(&app_dirs().0, &data_root(), &today(), license::LICENSING_ENABLED, license::PUBLIC_KEY)
+}
+
 /// 앱이 읽는 최근 추가 기록
 pub fn recent_batches() -> Vec<Value> {
     std::fs::read_to_string(app_dirs().0.join(BATCH_LOG))
@@ -268,6 +273,9 @@ pub fn add(target: &Target, items: &[String], by: Option<&str>) -> Result<String
     let root = data_root();
     if !external_add_allowed(&root) {
         return Err("Aru 설정에서 'AI·명령어로 추가'가 꺼져 있어 추가하지 않았다.".into());
+    }
+    if license_status() == license::Status::Expired {
+        return Err("Aru 체험 기간이 끝나 새 할 일을 넣을 수 없다. 앱 설정에서 라이선스를 등록하면 다시 된다.".into());
     }
     let rel = target.rel_path();
     let current = storage::read_text(&root, &rel)?.unwrap_or_default();

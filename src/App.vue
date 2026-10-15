@@ -2,6 +2,8 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, onMounted, ref, watch } from "vue";
 import AboutSection from "./components/AboutSection.vue";
+import LicenseSection from "./components/LicenseSection.vue";
+import { useLicense } from "./composables/useLicense";
 import DateBar from "./components/DateBar.vue";
 import SaveStatusBar from "./components/SaveStatus.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
@@ -92,6 +94,7 @@ function openCalendar() {
 }
 
 const drag = useListDrag({ today: todayItems, someday: somedayItems });
+const license = useLicense();
 const aiNotice = useAiNotice({
   shown: [
     { path: dayFile.path, items: todayItems },
@@ -195,6 +198,7 @@ onMounted(async () => {
         @reveal-folder="revealDataRoot"
         @close="showSettings = false"
       />
+      <LicenseSection />
       <AboutSection />
     </main>
     <main v-show="!showSettings" ref="body" class="body">
@@ -204,6 +208,7 @@ onMounted(async () => {
           v-model="todayItems"
           ref="todayList"
           :sort-checked="settings.sortChecked"
+          :locked="license.locked.value"
           list-key="today"
           placeholder="새 할 일 입력"
           :marker="drag.state.marker"
@@ -218,6 +223,7 @@ onMounted(async () => {
           v-model="somedayItems"
           ref="somedayList"
           :sort-checked="settings.sortChecked"
+          :locked="license.locked.value"
           list-key="someday"
           placeholder="언젠가 할 일 입력"
           :marker="drag.state.marker"
@@ -234,6 +240,11 @@ onMounted(async () => {
           >
           <button data-action="undo-ai" @click="aiNotice.undo()">되돌리기</button>
         </span>
+        <span
+          v-if="license.status.value.state === 'trial' && license.status.value.daysLeft <= 3"
+          class="trial"
+          >체험 {{ license.status.value.daysLeft }}일 남음</span
+        >
         <UpdatedNotice /><UpdateButton />
       </span>
     </SaveStatusBar>
@@ -247,6 +258,10 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   min-width: 0;
+}
+.trial {
+  color: var(--muted);
+  white-space: nowrap;
 }
 .ai-added {
   display: flex;

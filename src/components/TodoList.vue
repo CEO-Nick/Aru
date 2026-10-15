@@ -2,6 +2,7 @@
 import { nextTick, onBeforeUnmount, ref, type Directive } from "vue";
 import type { DropMarker } from "../composables/useListDrag";
 import { aiTagTitle, fromTagLabel } from "../core/format";
+import { openBuyPage } from "../platform/license";
 import {
   clearFrom,
   acceptAi,
@@ -22,6 +23,8 @@ const props = defineProps<{
   listKey?: string;
   marker?: DropMarker | null;
   draggingId?: string | null;
+  /** 체험이 끝나 새 할 일을 만들 수 없다. 있는 할 일은 그대로 보고 체크한다 */
+  locked?: boolean;
 }>();
 const emit = defineEmits<{ "drag-start": [id: string, event: PointerEvent] }>();
 
@@ -156,7 +159,8 @@ function onItemPaste(event: ClipboardEvent, item: TodoItem) {
   const pasted = event.clipboardData?.getData("text/plain") ?? "";
   if (!/[\r\n]/.test(pasted)) return;
   event.preventDefault();
-  const [first, ...rest] = pasted.split(/\r?\n/);
+  const [first, ...lines] = pasted.split(/\r?\n/);
+  const rest = props.locked ? [] : lines;
   const el = textOf(item.id);
   if (el) insertAtCaret(el, first);
   let list = updateText(items.value, item.id, el?.textContent ?? item.text + first);
@@ -198,7 +202,7 @@ async function onAddKeydown(event: KeyboardEvent) {
 /** 입력칸에 쓰다 만 글을 할 일로 등록한다. Cmd+S나 종료 때 입력 중이던 글을 잃지 않으려고 밖에서도 부른다 */
 function commitDraft(): boolean {
   const text = draft.value.trim();
-  if (!text) return false;
+  if (!text || props.locked) return false;
   const created = newItem(text);
   items.value = props.sortChecked ? insertAfterOpen(items.value, created) : insertAfter(items.value, null, created);
   draft.value = "";
@@ -212,7 +216,7 @@ function onItemKeydown(event: KeyboardEvent, item: TodoItem) {
     onArrow(event, item);
   } else if (isPlainEnter(event)) {
     event.preventDefault();
-    splitItem(event.target as HTMLElement, item);
+    if (!props.locked) splitItem(event.target as HTMLElement, item);
   } else if (event.key === "Backspace" && item.text !== "") {
     const el = event.target as HTMLElement;
     const sel = selectionIn(el);
@@ -345,7 +349,11 @@ const vEditableText: Directive<HTMLElement, string> = {
         >AI</span
       >
     </div>
-    <div ref="addRow" class="add" :class="{ 'drop-before': isDropBefore(null) }">
+    <div v-if="locked" ref="addRow" class="add locked" :class="{ 'drop-before': isDropBefore(null) }">
+      <span class="msg">체험이 끝났어요</span>
+      <button data-action="buy" @click="openBuyPage()">구매하기</button>
+    </div>
+    <div v-else ref="addRow" class="add" :class="{ 'drop-before': isDropBefore(null) }">
       <span class="box ghost"></span>
       <input v-model="draft" :placeholder="placeholder" @keydown="onAddKeydown" />
     </div>
@@ -471,6 +479,20 @@ const vEditableText: Directive<HTMLElement, string> = {
 }
 .ai:hover::after {
   content: " ✓";
+}
+.add.locked {
+  gap: 8px;
+  padding-left: 30px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.add.locked button {
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+  padding: 0;
 }
 .add input {
   flex: 1;

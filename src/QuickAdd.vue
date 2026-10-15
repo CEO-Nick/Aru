@@ -6,6 +6,8 @@ import { dayPath } from "./composables/useRollover";
 import { toIsoDate } from "./core/date";
 import { prependTodo } from "./core/todoFile";
 import { tauriStore } from "./platform/tauriStore";
+import { useLicense } from "./composables/useLicense";
+import { openBuyPage } from "./platform/license";
 
 type Target = "today" | "someday";
 
@@ -16,8 +18,10 @@ const added = ref(false);
 let busy = false;
 
 const close = () => invoke("hide_quick");
+const { locked, refresh } = useLicense();
 
 function reset() {
+  void refresh();
   draft.value = "";
   target.value = "today";
   added.value = false;
@@ -67,7 +71,12 @@ onMounted(async () => {
       <rect x="1.5" y="1.5" width="13" height="13" rx="3.5" />
       <path v-if="added" d="M4.6 8.2l2.3 2.3 4.6-5" />
     </svg>
+    <div v-if="locked" class="locked">
+      <span class="msg">체험이 끝났어요</span>
+      <button type="button" data-action="buy" @click="openBuyPage()">구매하기</button>
+    </div>
     <input
+      v-else
       ref="input"
       v-model="draft"
       :placeholder="target === 'today' ? '오늘 할 일 추가' : '언젠가 할 일 추가'"
@@ -162,5 +171,21 @@ input::placeholder {
 }
 .added .hint {
   color: #30d158;
+}
+.locked {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 17px;
+  color: #b9b9be;
+}
+.locked button {
+  border: 0;
+  background: none;
+  color: #0a84ff;
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
 }
 </style>

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aru 구매</title>
+<link rel="icon" href="../favicon.png" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<link rel="stylesheet" href="style.css" />
+<script src="config.js"></script>
+<script src="https://js.tosspayments.com/v2/standard"></script>
+</head>
+<body>
+<main>
+  <a class="brand" href="../"><img src="../icon.png" alt="" />Aru</a>
+  <h1>Aru 라이선스</h1>
+  <p class="lead">한 번 사면 계속 써요. 업데이트도 계속 받아요.</p>
+  <p class="price">3,900원<small>한 번 결제</small></p>
+  <p id="test-badge" class="test" hidden>테스트 결제 — 실제로 돈이 나가지 않아요</p>
+
+  <div class="card">
+    <label for="email">라이선스를 받을 이메일</label>
+    <input id="email" type="email" placeholder="you@example.com" autocomplete="email" required />
+    <p class="note">라이선스 키에 이 이메일이 적혀요. 결제 영수증도 이 주소로 가요.</p>
+    <div class="widget"><div id="payment-method"></div><div id="agreement"></div></div>
+    <button id="pay" class="btn" disabled>3,900원 결제하기</button>
+    <p id="error" class="error" hidden></p>
+  </div>
+  <p class="note">결제가 끝나면 이 화면에 라이선스 키가 보여요. Aru 설정의 "라이선스 키 붙여넣기"에 넣으면 끝이에요. 마음에 들지 않으면 14일 안에 환불해 드려요.</p>
+</main>
+<script>
+  const cfg = window.ARU_PAY;
+  document.getElementById("test-badge").hidden = !cfg.testMode;
+  const email = document.getElementById("email");
+  const pay = document.getElementById("pay");
+  const error = document.getElementById("error");
+  const random = () => crypto.getRandomValues(new Uint32Array(2)).join("").slice(0, 12);
+
+  (async () => {
+    const widgets = TossPayments(cfg.clientKey).widgets({ customerKey: TossPayments.ANONYMOUS });
+    await widgets.setAmount({ currency: "KRW", value: cfg.price });
+    await Promise.all([
+      widgets.renderPaymentMethods({ selector: "#payment-method", variantKey: "DEFAULT" }),
+      widgets.renderAgreement({ selector: "#agreement", variantKey: "AGREEMENT" }),
+    ]);
+    pay.disabled = false;
+    pay.onclick = async () => {
+      error.hidden = true;
+      if (!email.checkValidity() || !email.value) {
+        error.textContent = "라이선스를 받을 이메일을 적어 주세요.";
+        error.hidden = false;
+        return email.focus();
+      }
+      sessionStorage.setItem("aru-pay-email", email.value.trim());
+      try {
+        await widgets.requestPayment({
+          orderId: `aru-${Date.now()}-${random()}`,
+          orderName: "Aru 라이선스",
+          customerEmail: email.value.trim(),
+          successUrl: new URL("success.html", location.href).href,
+          failUrl: new URL("fail.html", location.href).href,
+        });
+      } catch (e) {
+        if (e?.code !== "USER_CANCEL") {
+          error.textContent = e?.message ?? "결제를 시작하지 못했어요.";
+          error.hidden = false;
+        }
+      }
+    };
+  })();
+</script>
+</body>
+</html>

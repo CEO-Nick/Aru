@@ -1,4 +1,5 @@
 pub mod cli;
+pub mod license;
 mod storage;
 
 use std::collections::HashSet;
@@ -304,6 +305,17 @@ fn recent_ai_batches() -> Vec<serde_json::Value> {
 }
 
 #[tauri::command]
+fn license_status() -> license::Status {
+    cli::license_status()
+}
+
+#[tauri::command]
+fn activate_license(key: String) -> Result<license::Status, String> {
+    license::activate(&cli::app_dirs().0, &key, license::PUBLIC_KEY)?;
+    Ok(cli::license_status())
+}
+
+#[tauri::command]
 fn pending_update(state: tauri::State<UpdateState>) -> Option<UpdateInfo> {
     state.0.lock().unwrap().clone()
 }
@@ -496,6 +508,8 @@ pub fn run() {
             check_update_now,
             os_version,
             recent_ai_batches,
+            license_status,
+            activate_license,
             install_update
         ])
         .build(context)

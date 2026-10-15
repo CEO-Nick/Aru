@@ -58,6 +58,12 @@
           return window.__asUpdate(window.__checkResult);
         case "plugin:app|version":
           return "0.2.1";
+        case "license_status":
+          return window.__license ?? { state: "disabled" };
+        case "activate_license":
+          if (args.key?.trim() !== "ARU-valid") throw "라이선스 키가 올바르지 않아요";
+          window.__license = { state: "licensed", name: "andantej@example.com" };
+          return window.__license;
         case "recent_ai_batches":
           return window.__aiBatches ?? [];
         case "os_version":
