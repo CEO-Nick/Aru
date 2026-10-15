@@ -30,6 +30,8 @@ const tag = computed(() => {
   align-items: center;
   gap: 6px;
   padding: 8px 10px 5px;
+  container-type: inline-size;
+  white-space: nowrap;
 }
 button {
   font: inherit;
@@ -51,6 +53,7 @@ button {
   background: var(--hover);
 }
 .date {
+  flex: none;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
   border-radius: 5px;
@@ -60,6 +63,7 @@ button {
   flex: 1;
 }
 .tag {
+  flex: none;
   font-size: 11px;
   border-radius: 4px;
   padding: 1px 6px;
@@ -73,6 +77,7 @@ button {
   color: #6cb4ff;
 }
 .today-btn {
+  flex: none;
   border: 1px solid var(--line);
   color: #cfcfd4;
   font-size: 11.5px;
@@ -83,5 +88,17 @@ button {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
+}
+/* 창이 좁으면 꼬리표 글자를 빼고 날짜 글자색으로 지난 날짜·예정을 알린다 */
+@container (max-width: 270px) {
+  .tag {
+    display: none;
+  }
+  .datebar:has(.tag.past) .date {
+    color: #ff9f0a;
+  }
+  .datebar:has(.tag.future) .date {
+    color: #6cb4ff;
+  }
 }
 </style>

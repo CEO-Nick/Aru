@@ -6,6 +6,8 @@ export interface Settings {
   /** 위쪽(오늘) 영역 높이 비율 */
   splitRatio: number;
   alwaysOnTop: boolean;
+  /** 체크하면 끝낸 일들 위로 옮긴다 */
+  sortChecked: boolean;
   carryOver: CarryOver;
   /** 자정 전환을 마지막으로 처리한 날짜. 며칠 꺼져 있던 경우를 따라잡는 데 쓴다 */
   lastRolloverDate: string | null;
@@ -15,6 +17,7 @@ export const DEFAULT_SETTINGS: Settings = {
   opacity: 100,
   splitRatio: 0.6,
   alwaysOnTop: true,
+  sortChecked: true,
   carryOver: "keep",
   lastRolloverDate: null,
 };
@@ -40,6 +43,7 @@ export function parseSettings(json: string | null): Settings {
     opacity: isNumber(r.opacity) ? clamp(r.opacity, 0, 100) : d.opacity,
     splitRatio: isNumber(r.splitRatio) ? clamp(r.splitRatio, 0.2, 0.8) : d.splitRatio,
     alwaysOnTop: typeof r.alwaysOnTop === "boolean" ? r.alwaysOnTop : d.alwaysOnTop,
+    sortChecked: typeof r.sortChecked === "boolean" ? r.sortChecked : d.sortChecked,
     carryOver: CARRY_OVERS.includes(r.carryOver as CarryOver) ? (r.carryOver as CarryOver) : d.carryOver,
     lastRolloverDate:
       typeof r.lastRolloverDate === "string" && ISO_DATE.test(r.lastRolloverDate) ? r.lastRolloverDate : null,

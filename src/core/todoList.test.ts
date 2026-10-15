@@ -3,6 +3,7 @@ import {
   clearFrom,
   insertAfter,
   moveBefore,
+  settleChecked,
   remove,
   toggle,
   transfer,
@@ -67,5 +68,31 @@ describe("clearFrom", () => {
   it("넘어온 날짜 꼬리표만 지우고 나머지는 그대로 둔다", () => {
     const moved: TodoItem = { id: "m", text: "PR 리뷰", done: false, from: "2026-10-12" };
     expect(clearFrom([a, moved], "m")).toEqual([a, { id: "m", text: "PR 리뷰", done: false }]);
+  });
+});
+
+describe("settleChecked", () => {
+  const t = (id: string, done: boolean): TodoItem => ({ id, text: id, done });
+  const ids = (list: TodoItem[]) => list.map((i) => i.id);
+
+  it("체크한 할 일은 남은 일 바로 아래(끝낸 일들의 맨 위)로 간다", () => {
+    const list = [t("a", false), t("b", true), t("c", false), t("x", true), t("y", true)];
+    expect(ids(settleChecked(list, "b"))).toEqual(["a", "c", "b", "x", "y"]);
+  });
+
+  it("체크를 푼 할 일은 남은 일들의 맨 아래로 간다", () => {
+    const list = [t("a", false), t("c", false), t("x", true), t("u", false), t("y", true)];
+    expect(ids(settleChecked(list, "u"))).toEqual(["a", "c", "u", "x", "y"]);
+  });
+
+  it("이미 제자리면 그대로다", () => {
+    const list = [t("a", false), t("x", true)];
+    expect(settleChecked(list, "x")).toEqual(list);
+  });
+
+  it("남은 일이 없으면 맨 위로, 없는 id면 그대로다", () => {
+    const list = [t("x", true), t("b", true)];
+    expect(ids(settleChecked(list, "b"))).toEqual(["b", "x"]);
+    expect(settleChecked(list, "zz")).toEqual(list);
   });
 });

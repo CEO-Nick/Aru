@@ -16,7 +16,9 @@ export function useTodoFile(path: Ref<string>, store: FileStore, saver: AutoSave
   const items = ref<TodoItem[]>([]);
   const loaded = ref(false);
   let notes = "";
-  /** 마지막으로 파일과 맞춰 본 내용. 파일이 없으면 "" */
+  /** 지금 파일에 실제로 들어 있다고 아는 내용(읽었거나 내가 다 쓴 것). 파일이 없으면 "" */
+  let fileBase = "";
+  /** 화면 목록을 마지막으로 파일 형식으로 만든 내용. 같은 내용을 두 번 저장하지 않으려고 둔다 */
   let lastKnown = "";
   let applying = false;
 
@@ -39,21 +41,28 @@ export function useTodoFile(path: Ref<string>, store: FileStore, saver: AutoSave
   async function load() {
     loaded.value = false;
     items.value = [];
-    lastKnown = (await store.read(path.value)) ?? "";
+    fileBase = lastKnown = (await store.read(path.value)) ?? "";
     apply(lastKnown);
   }
+
+  // 내가 쓴 저장이 끝나면 그게 지금 파일 내용이다. 뒤늦게 도착한 내 저장을 바깥 변경으로 착각하지 않게 한다
+  saver.onWrite((written, content) => {
+    if (written === path.value) fileBase = content;
+  });
 
   async function reloadIfChanged() {
     if (!loaded.value) return;
     const target = path.value;
     const content = (await store.read(target)) ?? "";
-    if (target !== path.value || content === lastKnown) return;
+    if (target !== path.value || content === fileBase) return;
     if (!saver.hasPending(target)) {
-      lastKnown = content;
+      fileBase = lastKnown = content;
       apply(content);
       return;
     }
-    const merged = mergeContent(lastKnown, dumpItems(items.value, notes), content);
+    // 저장 전인 내 변경이 있는데 바깥에서도 바뀌었다: 마지막 파일 내용을 기준으로 양쪽을 합친다
+    const merged = mergeContent(fileBase, dumpItems(items.value, notes), content);
+    fileBase = content;
     lastKnown = merged;
     apply(merged);
     saver.schedule(target, merged, "now");

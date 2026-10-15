@@ -130,4 +130,14 @@ describe("AutoSaver", () => {
     await vi.advanceTimersByTimeAsync(1);
     expect(writes).toEqual(["가"]);
   });
+
+  it("파일에 실제로 쓴 뒤 어떤 내용을 썼는지 알린다", async () => {
+    const { store } = memoryStore();
+    const saver = new AutoSaver(store);
+    const written: [string, string][] = [];
+    saver.onWrite((path, content) => written.push([path, content]));
+    saver.schedule("someday.md", "가", "now");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(written).toEqual([["someday.md", "가"]]);
+  });
 });

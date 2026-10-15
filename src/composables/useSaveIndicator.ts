@@ -1,11 +1,11 @@
-import { ref } from "vue";
+import { nextTick, ref } from "vue";
 import type { AutoSaver, SaveStatus } from "../core/autoSaver";
 
 /**
  * 하단 저장 표시 상태와 Cmd+S(윈도우는 Ctrl+S). Cmd+S는 기다리던 저장을 바로 쓰고,
  * 쓸 게 없어도 "저장됨"을 반짝여 눌렀다는 걸 알려 준다.
  */
-export function useSaveIndicator(saver: AutoSaver) {
+export function useSaveIndicator(saver: AutoSaver, beforeSave: () => void = () => {}) {
   const status = ref<SaveStatus>("saved");
   const savedAt = ref<number | null>(null);
 
@@ -15,6 +15,9 @@ export function useSaveIndicator(saver: AutoSaver) {
   });
 
   async function saveNow() {
+    // 입력칸에 쓰다 만 글도 할 일로 등록한 뒤 저장한다
+    beforeSave();
+    await nextTick();
     await saver.flush();
     if (status.value === "saved") savedAt.value = Date.now();
   }

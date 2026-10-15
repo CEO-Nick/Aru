@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import type { CarryOver } from "../core/settings";
 
-defineProps<{ carryOver: CarryOver; dataRoot: string }>();
+defineProps<{ carryOver: CarryOver; sortChecked: boolean; dataRoot: string }>();
 const emit = defineEmits<{
   "update:carryOver": [value: CarryOver];
+  "update:sortChecked": [value: boolean];
   "change-folder": [];
   "reveal-folder": [];
   close: [];
@@ -40,6 +41,24 @@ const OPTIONS: { value: CarryOver; title: string; hint: string }[] = [
           <small>{{ option.hint }}</small>
         </span>
       </div>
+    </div>
+
+    <hr />
+
+    <h4>끝낸 일</h4>
+    <div
+      class="switch-row"
+      role="switch"
+      tabindex="0"
+      :aria-checked="sortChecked"
+      @click="emit('update:sortChecked', !sortChecked)"
+      @keydown.space.prevent="emit('update:sortChecked', !sortChecked)"
+    >
+      <span>
+        <b>아래로 보내기</b>
+        <small>체크하고 1초 뒤 끝낸 일들 맨 위로 옮긴다. 그 사이 다시 누르면 취소된다.</small>
+      </span>
+      <span class="switch" :class="{ on: sortChecked }"><i></i></span>
     </div>
 
     <hr />
@@ -114,6 +133,51 @@ h4 {
 }
 .radio.on .rb {
   border: 4.5px solid var(--accent);
+}
+.switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 8px;
+  border-radius: 7px;
+  cursor: pointer;
+}
+.switch-row:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+.switch-row b {
+  display: block;
+  font-weight: 500;
+}
+.switch-row small {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.switch {
+  flex: none;
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: #4a4a4e;
+  position: relative;
+  transition: background 0.2s ease;
+}
+.switch i {
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #fff;
+  transition: transform 0.2s ease;
+}
+.switch.on {
+  background: #30d158;
+}
+.switch.on i {
+  transform: translateX(14px);
 }
 hr {
   border: 0;

@@ -64,3 +64,16 @@ function insertBefore(list: TodoItem[], beforeId: string | null, item: TodoItem)
   if (index === -1) return [...list, item];
   return [...list.slice(0, index), item, ...list.slice(index)];
 }
+
+/** 체크가 바뀐 할 일을 남은 일들 바로 뒤로 옮긴다. 체크했으면 끝낸 일들의 맨 위, 풀었으면 남은 일들의 맨 아래가 된다 */
+export function settleChecked(list: TodoItem[], id: string): TodoItem[] {
+  const item = list.find((t) => t.id === id);
+  if (!item) return list;
+  const rest = remove(list, id);
+  let at = 0;
+  rest.forEach((t, i) => {
+    if (!t.done) at = i + 1;
+  });
+  const moved = [...rest.slice(0, at), item, ...rest.slice(at)];
+  return moved.every((t, i) => t === list[i]) ? list : moved;
+}

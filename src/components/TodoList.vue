@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { nextTick, ref, type Directive } from "vue";
+import { nextTick, onBeforeUnmount, ref, type Directive } from "vue";
 import type { DropMarker } from "../composables/useListDrag";
 import { fromTagLabel } from "../core/format";
 import {
   clearFrom,
   insertAfter,
   remove,
+  settleChecked,
   toggle,
   updateText,
   type TodoItem,
@@ -14,6 +15,8 @@ import {
 const items = defineModel<TodoItem[]>({ required: true });
 const props = defineProps<{
   placeholder: string;
+  /** 체크하면 1초 뒤 끝낸 일들 위로 옮긴다(설정) */
+  sortChecked?: boolean;
   listKey?: string;
   marker?: DropMarker | null;
   draggingId?: string | null;
@@ -32,13 +35,42 @@ function textOf(id: string) {
   return root.value?.querySelector<HTMLElement>(`.text[data-id="${id}"]`) ?? undefined;
 }
 
-async function focusItem(id: string) {
+/** caret: 글자 안 위치(0부터). 생략하면 글자 끝 */
+async function focusItem(id: string, caret?: number) {
   await nextTick();
   const el = textOf(id);
   if (!el) return;
   el.focus();
-  caretToEnd(el);
+  if (caret === undefined) caretToEnd(el);
+  else caretAt(el, caret);
   reveal(el);
+}
+
+function caretAt(el: HTMLElement, offset: number) {
+  const selection = window.getSelection();
+  if (!selection) return;
+  const node = el.firstChild;
+  const range = document.createRange();
+  if (node?.nodeType === Node.TEXT_NODE) range.setStart(node, Math.min(offset, node.textContent?.length ?? 0));
+  else range.setStart(el, 0);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+/** 할 일 글자 안에서 지금 선택된 범위(글자 위치). 글자 밖이면 null */
+function selectionIn(el: HTMLElement): { start: number; end: number } | null {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return null;
+  const range = selection.getRangeAt(0);
+  if (!el.contains(range.startContainer) || !el.contains(range.endContainer)) return null;
+  const offset = (container: Node, at: number) => {
+    const pre = document.createRange();
+    pre.selectNodeContents(el);
+    pre.setEnd(container, at);
+    return pre.toString().length;
+  };
+  return { start: offset(range.startContainer, range.startOffset), end: offset(range.endContainer, range.endOffset) };
 }
 
 function caretToEnd(el: HTMLElement) {
@@ -97,9 +129,18 @@ function onArrow(event: KeyboardEvent, item: TodoItem | null) {
   }
 }
 
+// 할 일 한 줄 안에 줄바꿈이 들어오는 입력은 막는다(Enter는 따로 나누기로 처리한다)
+function onItemBeforeInput(event: InputEvent) {
+  if (event.inputType === "insertParagraph" || event.inputType === "insertLineBreak") event.preventDefault();
+}
+
 function onItemInput(event: Event, item: TodoItem) {
   const el = event.target as HTMLElement;
-  let text = el.textContent ?? "";
+  // WebKit은 줄바꿈을 <br>로 넣어 textContent에 안 잡힌다. 화면에 보이는 그대로(innerText) 읽는다
+  const hasBreak = el.querySelector("br, div, p") !== null;
+  // 칸을 다 지우면 브라우저가 자리 지킴용 <br> 하나를 넣는다. 끝의 줄바꿈 하나는 글자로 치지 않는다
+  let text = ((hasBreak ? el.innerText : el.textContent) ?? "").replace(/\r?\n$/, "");
+  if (hasBreak && text === "") el.textContent = "";
   if (/[\r\n]/.test(text)) {
     text = text.replace(/\r?\n/g, " ");
     el.textContent = text;
@@ -141,23 +182,38 @@ function insertAtCaret(el: HTMLElement, text: string) {
 
 async function onAddKeydown(event: KeyboardEvent) {
   if (event.key === "ArrowUp") return onArrow(event, null);
+  // 빈 입력칸에서 Backspace는 위 할 일로 올라간다. 위 할 일의 글자는 지우지 않는다
+  if (event.key === "Backspace" && draft.value === "" && items.value.length) {
+    event.preventDefault();
+    return focusItem(items.value[items.value.length - 1].id);
+  }
   if (!isPlainEnter(event)) return;
-  const text = draft.value.trim();
-  if (!text) return;
-  items.value = insertAfter(items.value, null, newItem(text));
-  draft.value = "";
+  if (!commitDraft()) return;
   await nextTick();
   reveal(addRow.value);
 }
+
+/** 입력칸에 쓰다 만 글을 할 일로 등록한다. Cmd+S나 종료 때 입력 중이던 글을 잃지 않으려고 밖에서도 부른다 */
+function commitDraft(): boolean {
+  const text = draft.value.trim();
+  if (!text) return false;
+  items.value = insertAfter(items.value, null, newItem(text));
+  draft.value = "";
+  return true;
+}
+
+defineExpose({ commitDraft });
 
 function onItemKeydown(event: KeyboardEvent, item: TodoItem) {
   if (event.key === "ArrowUp" || event.key === "ArrowDown") {
     onArrow(event, item);
   } else if (isPlainEnter(event)) {
     event.preventDefault();
-    const created = newItem("");
-    items.value = insertAfter(items.value, item.id, created);
-    focusItem(created.id);
+    splitItem(event.target as HTMLElement, item);
+  } else if (event.key === "Backspace" && item.text !== "") {
+    const el = event.target as HTMLElement;
+    const sel = selectionIn(el);
+    if (sel && sel.start === 0 && sel.end === 0) mergeIntoPrevious(event, item);
   } else if (event.key === "Backspace" && item.text === "") {
     event.preventDefault();
     const index = items.value.findIndex((t) => t.id === item.id);
@@ -165,6 +221,75 @@ function onItemKeydown(event: KeyboardEvent, item: TodoItem) {
     items.value = remove(items.value, item.id);
     if (previous) focusItem(previous.id);
     else addRow.value?.querySelector("input")?.focus();
+  }
+}
+
+// 노션·Obsidian처럼 커서 위치에서 할 일을 둘로 나눈다. 커서 뒤 글자는 아래 새 할 일(체크 안 됨)로 내려간다
+function splitItem(el: HTMLElement, item: TodoItem) {
+  const text = el.textContent ?? "";
+  const sel = selectionIn(el) ?? { start: text.length, end: text.length };
+  const index = items.value.findIndex((t) => t.id === item.id);
+  if (sel.start === 0 && sel.end === 0 && text !== "") {
+    // 맨 앞에서 누르면 위에 빈 할 일을 끼우고 커서는 원래 할 일에 둔다
+    items.value = [...items.value.slice(0, index), newItem(""), ...items.value.slice(index)];
+    focusItem(item.id, 0);
+    return;
+  }
+  const before = text.slice(0, sel.start).trimEnd();
+  const after = text.slice(sel.end).trimStart();
+  const created = newItem(after);
+  items.value = insertAfter(updateText(items.value, item.id, before), item.id, created);
+  focusItem(created.id, 0);
+}
+
+// 맨 앞에서 Backspace를 누르면 위 할 일 끝에 이어 붙인다. 나눌 때 뺀 띄어쓰기를 한 칸 되살린다
+function mergeIntoPrevious(event: KeyboardEvent, item: TodoItem) {
+  const index = items.value.findIndex((t) => t.id === item.id);
+  const previous = items.value[index - 1];
+  if (!previous) return;
+  event.preventDefault();
+  const joint = previous.text === "" || /\s$/.test(previous.text) ? previous.text : `${previous.text} `;
+  const children = [...(previous.children ?? []), ...(item.children ?? [])];
+  const merged: TodoItem = { ...previous, text: joint + item.text, ...(children.length ? { children } : {}) };
+  items.value = remove(items.value, item.id).map((t) => (t.id === previous.id ? merged : t));
+  focusItem(previous.id, joint.length);
+}
+
+// 체크하고 바로 옮기면 잘못 눌렀을 때 할 일이 눈앞에서 사라진다. 1초 기다렸다 옮기고, 그 사이 다시 누르면 취소한다
+const SETTLE_DELAY_MS = 1000;
+const settling = new Map<string, ReturnType<typeof setTimeout>>();
+
+function onToggle(item: TodoItem) {
+  items.value = toggle(items.value, item.id);
+  if (!props.sortChecked) return;
+  const pending = settling.get(item.id);
+  if (pending) {
+    clearTimeout(pending);
+    settling.delete(item.id);
+    return;
+  }
+  settling.set(
+    item.id,
+    setTimeout(() => {
+      settling.delete(item.id);
+      void animateReorder(() => (items.value = settleChecked(items.value, item.id)));
+    }, SETTLE_DELAY_MS),
+  );
+}
+
+onBeforeUnmount(() => settling.forEach(clearTimeout));
+
+// 순서가 바뀐 항목들이 새 자리로 미끄러져 가게 한다(바뀌기 전후 위치 차이만큼 되돌렸다가 풀어 준다)
+async function animateReorder(change: () => void) {
+  const rows = () => [...(root.value?.querySelectorAll<HTMLElement>(".item[data-item-id]") ?? [])];
+  const before = new Map(rows().map((el) => [el.dataset.itemId, el.getBoundingClientRect().top]));
+  change();
+  await nextTick();
+  if (matchMedia?.("(prefers-reduced-motion: reduce)").matches) return;
+  for (const el of rows()) {
+    const from = before.get(el.dataset.itemId);
+    const dy = from === undefined ? 0 : from - el.getBoundingClientRect().top;
+    if (dy) el.animate?.([{ transform: `translateY(${dy}px)` }, { transform: "none" }], { duration: 280, easing: "ease" });
   }
 }
 
@@ -195,12 +320,13 @@ const vEditableText: Directive<HTMLElement, string> = {
       <span class="grip" title="끌어서 이동" @pointerdown="emit('drag-start', item.id, $event)"
         >⋮⋮</span
       >
-      <span class="box" @click="items = toggle(items, item.id)"></span>
+      <span class="box" @click="onToggle(item)"></span>
       <span
         v-editable-text="item.text"
         class="text"
         :data-id="item.id"
         contenteditable="plaintext-only"
+        @beforeinput="onItemBeforeInput($event as InputEvent)"
         @input="onItemInput($event, item)"
         @paste="onItemPaste($event, item)"
         @keydown="onItemKeydown($event, item)"

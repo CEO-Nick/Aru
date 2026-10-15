@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { fs, openApp, scenario, texts } from "../harness.mjs";
+import { fs, openApp, scenario, texts, caretToEnd } from "../harness.mjs";
 
 const calls = (page, name) =>
   page.evaluate((n) => window.__calls.filter(([c]) => c === n).map(([, a]) => a), name);
@@ -36,7 +36,7 @@ export default async function (browser) {
   await scenario("폴더 변경: 고른 폴더로 바꾸기 전에 기다리던 저장부터 쓴다, 취소하면 아무것도 안 바뀐다", async () => {
     const { page, context } = await openApp(browser, { files: { "daily/2026-10-14.md": "- [ ] 하나\n" } });
     await page.locator('[data-list="today"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type("!");
     await page.locator('[aria-label="설정"]').click();
 

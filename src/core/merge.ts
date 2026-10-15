@@ -17,7 +17,8 @@ export function mergeContent(base: string, mine: string, theirs: string): string
     if (i !== -1) result.splice(i, 1);
   }
 
-  const added = new Set(without(theirLines, baseLines));
+  // 저쪽이 넣은 줄 중 내 쪽에 이미 있는 것은 빼고 넣는다 (내가 이미 반영한 변경이 되돌아온 경우)
+  const added = new Set(without(without(theirLines, baseLines), result));
   theirLines.forEach((line, i) => {
     if (!added.has(line)) return;
     added.delete(line);

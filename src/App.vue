@@ -23,7 +23,13 @@ import { tauriStore } from "./platform/tauriStore";
 import { tauriWindow } from "./platform/tauriWindow";
 
 const saver = new AutoSaver(tauriStore);
-const { status: saveStatus, savedAt } = useSaveIndicator(saver);
+const todayList = ref<InstanceType<typeof TodoList>>();
+const somedayList = ref<InstanceType<typeof TodoList>>();
+function commitDrafts() {
+  todayList.value?.commitDraft();
+  somedayList.value?.commitDraft();
+}
+const { status: saveStatus, savedAt, saveNow } = useSaveIndicator(saver, commitDrafts);
 
 const { settings, load: loadSettings } = useSettings(tauriStore, saver);
 
@@ -128,7 +134,7 @@ onMounted(async () => {
   // 작은 창을 닫으면 앱을 끄지 않고 숨긴다. 메뉴 막대 아이콘이나 Dock 아이콘으로 다시 연다
   await getCurrentWindow().onCloseRequested(async (event) => {
     event.preventDefault();
-    await saver.flush();
+    await saveNow();
     await getCurrentWindow().hide();
   });
   await onFileChanged(({ path }) => {
@@ -144,7 +150,7 @@ onMounted(async () => {
     await win.show();
     await win.setFocus();
   });
-  await onQuitRequested(() => saver.flush());
+  await onQuitRequested(() => saveNow());
 });
 </script>
 
@@ -160,6 +166,7 @@ onMounted(async () => {
     <main v-if="showSettings" class="body settings-body">
       <SettingsPanel
         v-model:carry-over="settings.carryOver"
+        v-model:sort-checked="settings.sortChecked"
         :data-root="dataRoot"
         @change-folder="changeFolder"
         @reveal-folder="revealDataRoot"
@@ -171,6 +178,8 @@ onMounted(async () => {
         <DateBar v-model:date="viewDate" :today="today" @open-calendar="openCalendar" />
         <TodoList
           v-model="todayItems"
+          ref="todayList"
+          :sort-checked="settings.sortChecked"
           list-key="today"
           placeholder="새 할 일 입력"
           :marker="drag.state.marker"
@@ -183,6 +192,8 @@ onMounted(async () => {
         <div class="section-label">언젠가</div>
         <TodoList
           v-model="somedayItems"
+          ref="somedayList"
+          :sort-checked="settings.sortChecked"
           list-key="someday"
           placeholder="언젠가 할 일 입력"
           :marker="drag.state.marker"

@@ -32,4 +32,10 @@ describe("mergeContent", () => {
     const theirs = "- [ ] 영\n- [ ] 하나\n- [ ] 둘\n";
     expect(mergeContent(base, mine, theirs)).toBe("- [ ] 영\n- [ ] 하나\n- [ ] 둘!\n");
   });
+
+  it("저쪽이 넣은 줄이 내 쪽에 이미 있으면 두 번 넣지 않는다", () => {
+    const mine = "- [ ] 하나\n- [ ] 둘\n- [ ] 셋\n- [ ] 넷\n";
+    const theirs = "- [ ] 하나\n- [ ] 둘\n- [ ] 셋\n";
+    expect(mergeContent(base, mine, theirs)).toBe(mine);
+  });
 });

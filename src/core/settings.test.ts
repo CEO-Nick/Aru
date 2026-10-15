@@ -40,3 +40,11 @@ describe("parseSettings: 이상한 값 바로잡기", () => {
     expect(parseSettings("null")).toEqual(DEFAULT_SETTINGS);
   });
 });
+
+describe("parseSettings: 끝낸 일 아래로 보내기", () => {
+  it("기본은 켜짐이고, 저장된 값이 참/거짓이 아니면 기본값이다", () => {
+    expect(DEFAULT_SETTINGS.sortChecked).toBe(true);
+    expect(parseSettings('{"sortChecked": false}').sortChecked).toBe(false);
+    expect(parseSettings('{"sortChecked": "no"}').sortChecked).toBe(true);
+  });
+});

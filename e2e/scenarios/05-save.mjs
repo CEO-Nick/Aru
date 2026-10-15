@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { fs, openApp, scenario, texts, writes } from "../harness.mjs";
+import { fs, openApp, scenario, texts, writes, caretToEnd } from "../harness.mjs";
 
 const TODAY = "daily/2026-10-14.md";
 
@@ -18,7 +18,7 @@ export default async function (browser) {
   await scenario("글자 수정은 입력을 멈추고 1초 뒤에 한 번 저장된다", async () => {
     const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 장보기\n" } });
     await page.locator('[data-list="today"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type(" 우유");
     const todayWrites = async () => (await writes(page)).filter(([p]) => p === TODAY);
     await page.clock.runFor(900);
@@ -76,7 +76,7 @@ export default async function (browser) {
   await scenario("창에서 벗어나면 기다리던 저장을 바로 쓴다", async () => {
     const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 장보기\n" } });
     await page.locator('[data-list="today"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type("!");
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
     await page.clock.runFor(10);
@@ -87,7 +87,7 @@ export default async function (browser) {
   await scenario("메뉴 막대에서 종료하면 기다리던 저장을 쓰고 나서 끈다", async () => {
     const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 장보기\n" } });
     await page.locator('[data-list="today"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type("!");
     await page.evaluate(() => window.__emit("quit-requested"));
     await page.clock.runFor(10);
@@ -175,7 +175,7 @@ export default async function (browser) {
   await scenario("Cmd+S를 누르면 기다리지 않고 바로 저장되고, 저장 표시가 반짝이며 시각이 붙는다", async () => {
     const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 장보기\n" } });
     await page.locator('[data-list="today"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type(" 우유");
     await page.keyboard.press("Meta+s");
     await page.clock.runFor(10);
@@ -203,6 +203,29 @@ export default async function (browser) {
     await page.locator('[data-list="today"] .add input').press("Enter");
     await page.clock.runFor(10);
     assert.ok(await page.locator(".foot").evaluate((e) => e.classList.contains("flash")));
+    await context.close();
+  });
+
+  await scenario("입력칸에 쓰고 Enter 없이 Cmd+S를 누르면 할 일로 등록되고 바로 저장되며, 커서는 입력칸에 남는다", async () => {
+    const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 하나\n" } });
+    const input = page.locator('[data-list="today"] .add input');
+    await input.click();
+    await page.keyboard.type("쓰다 만 일");
+    await page.keyboard.press("Meta+s");
+    await page.clock.runFor(10);
+    assert.equal((await fs(page))[TODAY], "- [ ] 하나\n- [ ] 쓰다 만 일\n");
+    assert.deepEqual(await texts(page, "today"), ["하나", "쓰다 만 일"]);
+    assert.equal(await input.inputValue(), "");
+    assert.ok(await input.evaluate((e) => e === document.activeElement), "커서가 입력칸을 벗어났다");
+    await context.close();
+  });
+
+  await scenario("입력칸에 글이 남은 채 앱을 끄면 그 글도 할 일로 저장된다", async () => {
+    const { page, context } = await openApp(browser);
+    await page.locator('[data-list="someday"] .add input').fill("언젠가 쓰다 만 일");
+    await page.evaluate(() => window.__emit("quit-requested"));
+    await page.clock.runFor(10);
+    assert.equal((await fs(page))["someday.md"], "- [ ] 언젠가 쓰다 만 일\n");
     await context.close();
   });
 }

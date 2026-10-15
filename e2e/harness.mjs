@@ -1,7 +1,7 @@
 // 실제 화면을 크롬으로 열어 사람이 하듯 조작하고 결과(화면·저장 파일)를 확인하는 E2E 도구
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { chromium } from "playwright-core";
+import { chromium, webkit } from "playwright-core";
 import { createServer } from "vite";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
@@ -31,7 +31,7 @@ export async function openApp(
   page.on("pageerror", (e) => errors.push(e.message));
   page.on("console", (m) => m.type() === "error" && errors.push(m.text()));
   await page.goto(`http://localhost:1430/${hash}`);
-  await page.waitForSelector(".foot");
+  await page.waitForSelector(hash.startsWith("#quick") ? ".quick" : ".foot");
   await page.clock.runFor(10);
   return { page, context, errors };
 }
@@ -41,7 +41,9 @@ export const writes = (page) => page.evaluate(() => window.__writes);
 export const texts = (page, list) =>
   page.$$eval(`[data-list="${list}"] .item .text`, (els) => els.map((e) => e.textContent));
 
+// 실제 앱은 WebKit(Safari 엔진)으로 그린다. E2E_BROWSER=webkit 이면 같은 엔진으로 돌린다
 export function launch() {
+  if (process.env.E2E_BROWSER === "webkit") return webkit.launch({ headless: true });
   return chromium.launch({ channel: "chrome", headless: true });
 }
 
@@ -62,4 +64,18 @@ export async function scenario(name, fn) {
 export function summary() {
   console.log(`\n${passes} passed, ${failures} failed`);
   return failures;
+}
+
+/** 지금 커서가 있는 칸의 글자 끝으로 커서를 보낸다(맥 WebKit은 End 키로 가지 않는다) */
+export async function caretToEnd(page) {
+  await page.evaluate(() => {
+    const el = document.activeElement;
+    if (!el || !el.isContentEditable) return;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const sel = getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
 }

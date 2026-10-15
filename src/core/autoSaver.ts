@@ -10,6 +10,7 @@ export class AutoSaver {
   private timers = new Map<string, ReturnType<typeof setTimeout>>();
   private pending = new Map<string, string>();
   private listeners: ((status: SaveStatus) => void)[] = [];
+  private writeListeners: ((path: string, content: string) => void)[] = [];
 
   constructor(private readonly store: FileStore) {}
 
@@ -30,6 +31,11 @@ export class AutoSaver {
         setTimeout(() => void this.save(path), DEBOUNCE_MS),
       );
     }
+  }
+
+  /** 파일에 실제로 쓴 뒤 알린다. 화면이 "지금 파일 내용"을 정확히 알아야 바깥 변경과 구분할 수 있다 */
+  onWrite(listener: (path: string, content: string) => void): void {
+    this.writeListeners.push(listener);
   }
 
   hasPending(path: string): boolean {
@@ -62,6 +68,7 @@ export class AutoSaver {
       this.emit("error");
       return;
     }
+    for (const listener of this.writeListeners) listener(path, content);
     if (this.pending.size === 0) this.emit("saved");
   }
 

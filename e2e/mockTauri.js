@@ -12,7 +12,7 @@
 
   window.__TAURI_INTERNALS__ = {
     metadata: {
-      currentWindow: { label: "main" },
+      currentWindow: { label: location.hash.startsWith("#overview") ? "overview" : location.hash.startsWith("#quick") ? "quick" : "main" },
       currentWebview: { windowLabel: "main", label: "main" },
     },
     transformCallback(cb) {
@@ -34,7 +34,18 @@
           else window.__mockFs[args.path] = args.content;
           window.__writes.push([args.path, args.content]);
           persist();
-          setTimeout(() => window.__emit("file-changed", { path: args.path, source: "self" }));
+          setTimeout(() => window.__emit("file-changed", { path: args.path, source: window.__TAURI_INTERNALS__.metadata.currentWindow.label }));
+          // 녹화 무대처럼 여러 창을 한 페이지에 띄울 때 다른 창에도 파일 변경을 알린다
+          if (window.parent !== window) window.parent.postMessage({ type: "fs-write", path: args.path, content: args.content }, "*");
+          return null;
+        case "set_window_opacity":
+          if (window.parent !== window) window.parent.postMessage({ type: "opacity", alpha: args.alpha }, "*");
+          return null;
+        case "open_overview":
+          if (window.parent !== window) window.parent.postMessage({ type: "open-overview" }, "*");
+          return null;
+        case "hide_quick":
+          if (window.parent !== window) window.parent.postMessage({ type: "hide-quick" }, "*");
           return null;
         case "get_data_root":
           return "/Users/me/Library/Application Support/dev.aruu.floatingtodo";

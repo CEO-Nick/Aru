@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { openApp, scenario, texts } from "../harness.mjs";
+import { fs, openApp, scenario, texts, caretToEnd } from "../harness.mjs";
 
 async function dragGrip(page, fromSelector, toSelector, position = "top") {
   const from = page.locator(fromSelector);
@@ -45,7 +45,7 @@ export default async function (browser) {
     });
     const first = page.locator('[data-list="today"] .item .text').first();
     await first.click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.press("Enter");
     assert.deepEqual(await texts(page, "today"), ["하나", "", "둘"]);
     const focusedIndex = await page.evaluate(() =>
@@ -70,7 +70,7 @@ export default async function (browser) {
       files: { "daily/2026-10-14.md": "- [ ] 장보기\n" },
     });
     await page.locator('[data-list="today"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type(" 우유");
     assert.deepEqual(await texts(page, "today"), ["장보기 우유"]);
     await context.close();
@@ -137,6 +137,113 @@ export default async function (browser) {
       return add.top >= pane.top && add.bottom <= pane.bottom + 1;
     });
     assert.ok(visible, "입력칸이 화면 밖에 있다");
+    await context.close();
+  });
+
+  await scenario("빈 입력칸에서 Backspace → 마지막 할 일 끝으로 올라가고, 한 번 더 누르면 그 글자를 지운다", async () => {
+    const { page, context } = await openApp(browser, { files: { "daily/2026-10-14.md": "- [ ] 하나\n- [ ] 장보기\n" } });
+    await page.locator('[data-list="today"] .add input').click();
+    await page.keyboard.press("Backspace");
+    const focused = await page.evaluate(() =>
+      [...document.querySelectorAll('[data-list="today"] .item .text')].indexOf(document.activeElement),
+    );
+    assert.equal(focused, 1);
+    assert.deepEqual(await texts(page, "today"), ["하나", "장보기"]);
+    await page.keyboard.press("Backspace");
+    assert.deepEqual(await texts(page, "today"), ["하나", "장보"]);
+    await context.close();
+  });
+
+  await scenario("글자 중간에서 Enter → 커서 뒤가 새 할 일로 내려가고, 거기서 바로 이어 쓸 수 있다. 맨 앞 Backspace로 다시 합쳐진다", async () => {
+    const { page, context } = await openApp(browser, {
+      files: { "daily/2026-10-14.md": "- [ ] 전자고지서 스테이지 배포하기\n" },
+    });
+    await page.locator('[data-list="today"] .item .text').click();
+    await caretToEnd(page);
+    for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("Enter");
+    assert.deepEqual(await texts(page, "today"), ["전자고지서 스테이지", "배포하기"]);
+    await page.keyboard.type("오늘 ");
+    assert.deepEqual(await texts(page, "today"), ["전자고지서 스테이지", "오늘 배포하기"]);
+    await page.clock.runFor(1100);
+    assert.equal((await fs(page))["daily/2026-10-14.md"], "- [ ] 전자고지서 스테이지\n- [ ] 오늘 배포하기\n");
+
+    for (let i = 0; i < 3; i++) await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("Backspace");
+    assert.deepEqual(await texts(page, "today"), ["전자고지서 스테이지 오늘 배포하기"]);
+    await page.keyboard.type("꼭 ");
+    assert.deepEqual(await texts(page, "today"), ["전자고지서 스테이지 꼭 오늘 배포하기"]);
+    await context.close();
+  });
+
+  await scenario("체크하면 1초 뒤 끝낸 일들 맨 위로 내려가고 파일 순서도 바뀐다, 그 사이 다시 누르면 취소된다", async () => {
+    const { page, context } = await openApp(browser, {
+      files: { "daily/2026-10-14.md": "- [ ] 하나\n- [ ] 둘\n- [ ] 셋\n- [x] 어제 끝낸 일\n" },
+    });
+    const box = (text) => page.locator('[data-list="today"] .item', { hasText: text }).locator(".box");
+    await box("하나").click();
+    await page.clock.runFor(500);
+    assert.deepEqual(await texts(page, "today"), ["하나", "둘", "셋", "어제 끝낸 일"]);
+    await page.clock.runFor(600);
+    assert.deepEqual(await texts(page, "today"), ["둘", "셋", "하나", "어제 끝낸 일"]);
+    assert.equal((await fs(page))["daily/2026-10-14.md"], "- [ ] 둘\n- [ ] 셋\n- [x] 하나\n- [x] 어제 끝낸 일\n");
+
+    await box("둘").click();
+    await page.clock.runFor(400);
+    await box("둘").click();
+    await page.clock.runFor(2000);
+    assert.deepEqual(await texts(page, "today"), ["둘", "셋", "하나", "어제 끝낸 일"]);
+
+    await box("하나").click();
+    await page.clock.runFor(1100);
+    assert.deepEqual(await texts(page, "today"), ["둘", "셋", "하나", "어제 끝낸 일"], "체크를 풀면 남은 일들 맨 아래로");
+    await context.close();
+  });
+
+  await scenario("다른 할 일을 고치는 중에 체크한 할 일이 내려가도 커서와 입력이 끊기지 않는다", async () => {
+    const { page, context } = await openApp(browser, {
+      files: { "daily/2026-10-14.md": "- [ ] 하나\n- [ ] 둘\n- [ ] 셋\n" },
+    });
+    await page.locator('[data-list="today"] .item .box').first().click();
+    await page.locator('[data-list="today"] .item .text').nth(2).click();
+    await caretToEnd(page);
+    await page.keyboard.type(" 가");
+    await page.clock.runFor(1100);
+    await page.keyboard.type("나");
+    assert.deepEqual(await texts(page, "today"), ["둘", "셋 가나", "하나"]);
+    await page.clock.runFor(1100);
+    assert.equal((await fs(page))["daily/2026-10-14.md"], "- [ ] 둘\n- [ ] 셋 가나\n- [x] 하나\n");
+    await context.close();
+  });
+
+  await scenario("설정에서 '아래로 보내기'를 끄면 체크해도 그 자리에 남는다", async () => {
+    const { page, context } = await openApp(browser, {
+      files: {
+        "daily/2026-10-14.md": "- [ ] 하나\n- [ ] 둘\n",
+        "settings.json": JSON.stringify({ sortChecked: false }),
+      },
+    });
+    await page.locator('[data-list="today"] .item .box').first().click();
+    await page.clock.runFor(2000);
+    assert.deepEqual(await texts(page, "today"), ["하나", "둘"]);
+    await page.locator('[aria-label="설정"]').click();
+    await page.locator('[role="switch"]').click();
+    await page.clock.runFor(10);
+    assert.equal(JSON.parse((await fs(page))["settings.json"]).sortChecked, true);
+    await context.close();
+  });
+
+  await scenario("체크한 그 할 일을 1초 안에 고치기 시작해도, 옮겨진 뒤 커서가 그 칸에 남아 이어서 쓸 수 있다", async () => {
+    const { page, context } = await openApp(browser, {
+      files: { "daily/2026-10-14.md": "- [ ] 하나\n- [ ] 둘\n" },
+    });
+    await page.locator('[data-list="today"] .item .box').first().click();
+    await page.locator('[data-list="today"] .item .text').first().click();
+    await caretToEnd(page);
+    await page.keyboard.type("!");
+    await page.clock.runFor(1100);
+    await page.keyboard.type("?");
+    assert.deepEqual(await texts(page, "today"), ["둘", "하나!?"]);
     await context.close();
   });
 }

@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Aru 빠른 입력 녹화 무대</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(110% 80% at 80% 115%, #ff8a3d4d 0%, transparent 55%),
+      linear-gradient(170deg, #17181b 0%, #1d1f23 55%, #2a211c 100%);
+    font: 13px/1.7 "SF Mono", Menlo, monospace;
+  }
+  .menubar {
+    position: absolute; left: 0; right: 0; top: 0; height: 24px; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 14px; background: #0c0d0f99; color: #e8e8ee;
+    font: 600 12px -apple-system, "Apple SD Gothic Neo", sans-serif;
+  }
+  .editor {
+    position: absolute; left: 18px; top: 40px; width: 560px; bottom: 22px;
+    background: #1b1c1f; border: 1px solid #ffffff14; border-radius: 12px; color: #9aa3b8;
+    padding: 40px 22px 0; white-space: pre; overflow: hidden;
+  }
+  .editor .bar { position: absolute; left: 12px; top: 11px; display: flex; gap: 8px }
+  .editor .bar i { width: 12px; height: 12px; border-radius: 50%; background: #4a4b50 }
+  .editor b { color: #e6a26b; font-weight: 400 } .editor i.f { color: #7fd1b9; font-style: normal } .editor u { color: #ffb86b; text-decoration: none }
+  .win {
+    position: absolute; right: 22px; top: 40px; width: 300px; height: 440px; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 30px 70px #00000080, 0 0 0 1px #ffffff1f;
+  }
+  .win iframe, .quick iframe { width: 100%; height: 100%; border: 0; display: block; background: transparent }
+  .lights { position: absolute; left: 12px; top: 11px; display: flex; gap: 8px; pointer-events: none }
+  .lights i { width: 12px; height: 12px; border-radius: 50% }
+  .lights i:nth-child(1) { background: #ff5f57 } .lights i:nth-child(2) { background: #febc2e } .lights i:nth-child(3) { background: #28c840 }
+  .quick { position: absolute; left: 50%; top: 120px; width: 620px; height: 96px; margin-left: -310px; opacity: 0; transform: translateY(-6px) scale(.98); transition: opacity .16s ease, transform .16s ease; pointer-events: none }
+  .quick.show { opacity: 1; transform: none; pointer-events: auto }
+  .keys { position: absolute; left: 50%; bottom: 40px; transform: translateX(-50%); display: flex; gap: 8px; opacity: 0; transition: opacity .2s }
+  .keys.show { opacity: 1 }
+  .keys span { font: 600 18px -apple-system, sans-serif; color: #f2eee8; background: #2a2b2fe6; border: 1px solid #ffffff2a; border-bottom-width: 3px; border-radius: 10px; padding: 8px 14px; min-width: 22px; text-align: center }
+</style>
+</head>
+<body>
+<div class="menubar"><span>Code</span><span>10월 14일 (수) 오전 10:00</span></div>
+<div class="editor"><div class="bar"><i></i><i></i><i></i></div><b>export</b> <b>async</b> <b>function</b> <i class="f">deploy</i>(env) {
+  <b>const</b> build = <b>await</b> <i class="f">bundle</i>(<u>"release"</u>)
+  <b>await</b> <i class="f">upload</i>(build, env)
+  <b>return</b> <i class="f">notify</i>(<u>"#deploy"</u>, build.version)
+}
+
+<b>describe</b>(<u>"deploy"</u>, () =&gt; {
+  <i class="f">it</i>(<u>"uploads to stage first"</u>, <b>async</b> () =&gt; {
+    <b>await</b> <i class="f">deploy</i>(<u>"stage"</u>)
+    <i class="f">expect</i>(uploads).<i class="f">toContain</i>(<u>"stage"</u>)
+  })
+})</div>
+<div class="win"><iframe id="app" src="/index.html"></iframe><div class="lights"><i></i><i></i><i></i></div></div>
+<div class="quick" id="quickwrap"><iframe id="quick" src="/index.html#quick"></iframe></div>
+<div class="keys" id="keys"><span>⌥</span><span>Space</span></div>
+<script>
+  const quick = document.getElementById("quickwrap");
+  const app = document.getElementById("app");
+  // 녹화 스크립트가 부른다: 단축키를 누른 것처럼 입력창을 띄운다
+  window.pressShortcut = () => {
+    document.getElementById("keys").classList.add("show");
+    setTimeout(() => {
+      quick.classList.add("show");
+      const w = document.getElementById("quick").contentWindow;
+      w.__emit("quick-shown");
+      w.focus();
+    }, 380);
+    setTimeout(() => document.getElementById("keys").classList.remove("show"), 1100);
+  };
+  addEventListener("message", (e) => {
+    if (e.data?.type === "hide-quick") quick.classList.remove("show");
+    if (e.data?.type === "fs-write" && e.source !== app.contentWindow) {
+      app.contentWindow.__setFile(e.data.path, e.data.content);
+      app.contentWindow.__emit("file-changed", { path: e.data.path, source: "quick" });
+    }
+  });
+</script>
+</body>
+</html>

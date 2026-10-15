@@ -1,6 +1,6 @@
 // 버그 탐색에서 찾은 21건과 추가 기능(방향키 이동, Esc 드래그 취소)의 재발 방지 시나리오
 import assert from "node:assert/strict";
-import { fs, openApp, scenario, texts } from "../harness.mjs";
+import { fs, openApp, scenario, texts, caretToEnd } from "../harness.mjs";
 
 const TODAY = "daily/2026-10-14.md";
 const BIG = { hash: "#overview", viewport: { width: 1180, height: 760 } };
@@ -23,7 +23,7 @@ export default async function (browser) {
     const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 하나\n" } });
     const text = page.locator('[data-list="today"] .item .text').first();
     await text.click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.evaluate(() => document.execCommand("insertText", false, "\n둘째 줄"));
     await page.clock.runFor(1100);
     const shown = await text.evaluate((e) => e.innerText);
@@ -48,7 +48,7 @@ export default async function (browser) {
   await scenario("B03 Enter로 만든 빈 항목을 그대로 두고 나가면 파일에 빈 할 일이 남지 않아야 한다", async () => {
     const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 하나\n" } });
     await page.locator('[data-list="today"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.press("Enter");
     await page.evaluate(() => window.dispatchEvent(new Event("blur")));
     await page.clock.runFor(10);
@@ -166,7 +166,7 @@ export default async function (browser) {
   await scenario("B14 모아보기 창에서 고치던 중 메뉴 막대로 종료해도 그 내용이 저장되어야 한다", async () => {
     const { page, context } = await openApp(browser, { ...BIG, files: { [TODAY]: "- [ ] 하나\n" } });
     await page.locator('[data-list="overview"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type("!");
     await page.evaluate(() => window.__emit("quit-requested"));
     await page.clock.runFor(10);
@@ -177,7 +177,7 @@ export default async function (browser) {
   await scenario("B15 두 창이 같은 날짜를 1초 안에 각각 고치면 한쪽 수정이 사라지면 안 된다", async () => {
     const { page, context } = await openApp(browser, { ...BIG, files: { [TODAY]: "- [ ] 하나\n" } });
     await page.locator('[data-list="overview"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type("!");
     await page.evaluate((p) => {
       window.__setFile(p, "- [ ] 하나\n- [ ] 작은 창에서 추가\n");
@@ -286,7 +286,7 @@ export default async function (browser) {
   await scenario("B25 모아보기 창에서 날짜를 바꾸는 순간 고치던 내용은 원래 날짜에 저장돼야 한다", async () => {
     const { page, context } = await openApp(browser, { ...BIG, files: { [TODAY]: "- [ ] 하나\n" } });
     await page.locator('[data-list="overview"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type("!");
     await page.locator('.cell[data-date="2026-10-20"]').click();
     await page.clock.runFor(10);
@@ -330,7 +330,7 @@ export default async function (browser) {
   await scenario("B29 작은 창을 닫으면 앱이 꺼지지 않고 저장한 뒤 숨는다", async () => {
     const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 하나\n" } });
     await page.locator('[data-list="today"] .item .text').click();
-    await page.keyboard.press("End");
+    await caretToEnd(page);
     await page.keyboard.type("!");
     await page.evaluate(() => window.__emit("tauri://close-requested", null));
     await page.clock.runFor(10);
@@ -338,6 +338,21 @@ export default async function (browser) {
     assert.equal((await fs(page))[TODAY], "- [ ] 하나!\n");
     assert.ok(calls.includes("plugin:window|hide"), "숨기지 않았다");
     assert.ok(!calls.includes("plugin:window|destroy"), "창을 없앴다");
+    await context.close();
+  });
+
+  await scenario("B30 체크(즉시 저장) 직후 이어서 치는 글자가, 저장 완료 신호나 파일 다시 읽기에 덮여 사라지지 않는다", async () => {
+    const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 하나\n- [ ] 둘\n" } });
+    await page.locator('[data-list="today"] .item .box').first().click();
+    await page.locator('[data-list="today"] .item .text').nth(1).click();
+    await caretToEnd(page);
+    await page.keyboard.type(" 추가");
+    await page.clock.runFor(1);
+    await page.evaluate(() => window.dispatchEvent(new Event("focus")));
+    await page.clock.runFor(16_000);
+    // 체크한 "하나"는 1초 뒤 끝낸 일 쪽(아래)으로 옮겨진다
+    assert.deepEqual(await texts(page, "today"), ["둘 추가", "하나"]);
+    assert.equal((await fs(page))[TODAY], "- [ ] 둘 추가\n- [x] 하나\n");
     await context.close();
   });
 }

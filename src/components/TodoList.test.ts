@@ -1,11 +1,12 @@
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import TodoList from "./TodoList.vue";
 import type { TodoItem } from "../core/todoList";
 
-function mountList(items: TodoItem[]) {
+function mountList(items: TodoItem[], extra: Record<string, unknown> = {}) {
   const wrapper = mount(TodoList, {
     props: {
+      ...extra,
       modelValue: items,
       "onUpdate:modelValue": (value: TodoItem[]) => wrapper.setProps({ modelValue: value }),
       placeholder: "새 할 일 입력",
@@ -209,5 +210,179 @@ describe("TodoList", () => {
     await text.trigger("input");
     expect(current(wrapper)[0].text).toBe("하나 둘");
     expect(text.element.textContent).toBe("하나 둘");
+  });
+
+  it("빈 입력칸에서 Backspace를 누르면 마지막 할 일 글자 끝으로 커서가 올라간다 (글자는 지우지 않는다)", async () => {
+    const wrapper = mountList([
+      { id: "a", text: "하나", done: false },
+      { id: "b", text: "둘", done: false },
+    ]);
+    const input = wrapper.find(".add input");
+    (input.element as HTMLInputElement).focus();
+
+    await input.trigger("keydown", { key: "Backspace" });
+    await wrapper.vm.$nextTick();
+
+    expect(document.activeElement).toBe(wrapper.findAll(".item .text")[1].element);
+    expect(current(wrapper).map((t) => t.text)).toEqual(["하나", "둘"]);
+  });
+
+  it("입력칸에 글자가 있거나 할 일이 하나도 없으면 Backspace는 평소대로 둔다", async () => {
+    const filled = mountList([{ id: "a", text: "하나", done: false }]);
+    const input = filled.find(".add input");
+    await input.setValue("쓰는 중");
+    (input.element as HTMLInputElement).focus();
+    await input.trigger("keydown", { key: "Backspace" });
+    expect(document.activeElement).toBe(input.element);
+
+    const empty = mountList([]);
+    const emptyInput = empty.find(".add input");
+    (emptyInput.element as HTMLInputElement).focus();
+    await emptyInput.trigger("keydown", { key: "Backspace" });
+    expect(document.activeElement).toBe(emptyInput.element);
+  });
+
+  it("입력칸에 쓰다 만 글은 commitDraft로 할 일로 등록되고 입력칸은 비워진다", async () => {
+    const wrapper = mountList([{ id: "a", text: "하나", done: false }]);
+    const input = wrapper.find(".add input");
+    await input.setValue("  쓰다 만 일 ");
+    (wrapper.vm as unknown as { commitDraft: () => void }).commitDraft();
+    await wrapper.vm.$nextTick();
+    expect(current(wrapper).map((t) => t.text)).toEqual(["하나", "쓰다 만 일"]);
+    expect((input.element as HTMLInputElement).value).toBe("");
+  });
+
+  it("입력칸이 비었으면 commitDraft는 아무것도 하지 않는다", async () => {
+    const wrapper = mountList([{ id: "a", text: "하나", done: false }]);
+    (wrapper.vm as unknown as { commitDraft: () => void }).commitDraft();
+    await wrapper.vm.$nextTick();
+    expect(current(wrapper).map((t) => t.text)).toEqual(["하나"]);
+  });
+
+  /** 항목 글자 안 offset 위치에 커서를 둔다 */
+  function placeCaret(el: Element, offset: number) {
+    (el as HTMLElement).focus();
+    const range = document.createRange();
+    range.setStart(el.firstChild ?? el, offset);
+    range.collapse(true);
+    const sel = window.getSelection()!;
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  function caretOffset(el: Element) {
+    const sel = window.getSelection()!;
+    const range = sel.getRangeAt(0);
+    const pre = document.createRange();
+    pre.selectNodeContents(el);
+    pre.setEnd(range.startContainer, range.startOffset);
+    return pre.toString().length;
+  }
+
+  it("글자 중간에서 Enter를 누르면 커서 뒤 글자가 아래 새 할 일로 내려가고, 커서는 그 앞에 놓인다", async () => {
+    const wrapper = mountList([
+      { id: "a", text: "전자고지서 스테이지 배포하기", done: false },
+      { id: "z", text: "끝", done: false },
+    ]);
+    const text = wrapper.find(".item .text");
+    placeCaret(text.element, "전자고지서 스테이지".length);
+
+    await text.trigger("keydown", { key: "Enter" });
+    await wrapper.vm.$nextTick();
+
+    expect(current(wrapper).map((t) => t.text)).toEqual(["전자고지서 스테이지", "배포하기", "끝"]);
+    const second = wrapper.findAll(".item .text")[1].element;
+    expect(document.activeElement).toBe(second);
+    expect(caretOffset(second)).toBe(0);
+  });
+
+  it("체크한 할 일을 나누면 앞부분은 체크 그대로, 내려간 부분은 체크 안 된 새 할 일이다", async () => {
+    const wrapper = mountList([{ id: "a", text: "보고서 작성 메일 발송", done: true }]);
+    const text = wrapper.find(".item .text");
+    placeCaret(text.element, "보고서 작성".length);
+    await text.trigger("keydown", { key: "Enter" });
+    expect(current(wrapper).map((t) => [t.text, t.done])).toEqual([
+      ["보고서 작성", true],
+      ["메일 발송", false],
+    ]);
+  });
+
+  it("글자 맨 앞에서 Enter를 누르면 위에 빈 할 일이 생기고 커서는 원래 할 일에 남는다", async () => {
+    const wrapper = mountList([{ id: "a", text: "장보기", done: true }]);
+    const text = wrapper.find(".item .text");
+    placeCaret(text.element, 0);
+    await text.trigger("keydown", { key: "Enter" });
+    await wrapper.vm.$nextTick();
+    expect(current(wrapper).map((t) => [t.text, t.done])).toEqual([
+      ["", false],
+      ["장보기", true],
+    ]);
+    expect(document.activeElement).toBe(wrapper.findAll(".item .text")[1].element);
+  });
+
+  it("글자 맨 앞에서 Backspace를 누르면 위 할 일과 합쳐지고 커서는 이어 붙인 자리에 놓인다", async () => {
+    const wrapper = mountList([
+      { id: "a", text: "전자고지서 스테이지", done: false },
+      { id: "b", text: "배포하기", done: false },
+    ]);
+    const text = wrapper.findAll(".item .text")[1];
+    placeCaret(text.element, 0);
+    await text.trigger("keydown", { key: "Backspace" });
+    await wrapper.vm.$nextTick();
+    expect(current(wrapper).map((t) => t.text)).toEqual(["전자고지서 스테이지 배포하기"]);
+    const merged = wrapper.find(".item .text").element;
+    expect(document.activeElement).toBe(merged);
+    expect(caretOffset(merged)).toBe("전자고지서 스테이지 ".length);
+  });
+
+  describe("끝낸 일 아래로 보내기", () => {
+    const list = () => [
+      { id: "a", text: "하나", done: false },
+      { id: "b", text: "둘", done: false },
+      { id: "x", text: "끝낸 일", done: true },
+    ];
+    const order = (w: ReturnType<typeof mountList>) => current(w).map((t) => t.id);
+
+    it("켜져 있으면 체크하고 1초 뒤 끝낸 일들의 맨 위로 옮긴다", async () => {
+      vi.useFakeTimers();
+      const wrapper = mountList(list(), { sortChecked: true });
+      await wrapper.findAll(".item .box")[0].trigger("click");
+      expect(current(wrapper)[0].done).toBe(true);
+      expect(order(wrapper)).toEqual(["a", "b", "x"]);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(order(wrapper)).toEqual(["b", "a", "x"]);
+      vi.useRealTimers();
+    });
+
+    it("1초 안에 다시 누르면 옮기지 않고 체크도 풀린다", async () => {
+      vi.useFakeTimers();
+      const wrapper = mountList(list(), { sortChecked: true });
+      const box = () => wrapper.findAll(".item .box")[0];
+      await box().trigger("click");
+      await vi.advanceTimersByTimeAsync(500);
+      await box().trigger("click");
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(order(wrapper)).toEqual(["a", "b", "x"]);
+      expect(current(wrapper)[0].done).toBe(false);
+      vi.useRealTimers();
+    });
+
+    it("체크를 풀면 1초 뒤 남은 일들의 맨 아래로 올라온다", async () => {
+      vi.useFakeTimers();
+      const wrapper = mountList([...list(), { id: "y", text: "또 끝낸 일", done: true }], { sortChecked: true });
+      await wrapper.findAll(".item .box")[3].trigger("click");
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(order(wrapper)).toEqual(["a", "b", "y", "x"]);
+      vi.useRealTimers();
+    });
+
+    it("꺼져 있으면 체크해도 그 자리에 둔다", async () => {
+      vi.useFakeTimers();
+      const wrapper = mountList(list(), { sortChecked: false });
+      await wrapper.findAll(".item .box")[0].trigger("click");
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(order(wrapper)).toEqual(["a", "b", "x"]);
+      vi.useRealTimers();
+    });
   });
 });

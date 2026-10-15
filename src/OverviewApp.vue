@@ -6,6 +6,7 @@ import TodoList from "./components/TodoList.vue";
 import { watchDayChange } from "./composables/useDayWatcher";
 import { useListDrag } from "./composables/useListDrag";
 import { dayPath } from "./composables/useRollover";
+import { useSettings } from "./composables/useSettings";
 import { useTodoFile } from "./composables/useTodoFile";
 import { useSaveIndicator } from "./composables/useSaveIndicator";
 import { AutoSaver } from "./core/autoSaver";
@@ -24,7 +25,16 @@ const MAX_IN_CELL = 3;
 const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
 
 const saver = new AutoSaver(tauriStore);
-const { status: saveStatus, savedAt } = useSaveIndicator(saver);
+const dayList = ref<InstanceType<typeof TodoList>>();
+const somedayList = ref<InstanceType<typeof TodoList>>();
+function commitDrafts() {
+  dayList.value?.commitDraft();
+  somedayList.value?.commitDraft();
+}
+const { status: saveStatus, savedAt, saveNow } = useSaveIndicator(saver, commitDrafts);
+
+// 설정은 작은 창이 바꾼다. 여기서는 읽기만 하고 바뀌면 다시 읽는다
+const { settings, load: loadSettings } = useSettings(tauriStore, saver);
 
 const today = ref(toIsoDate(new Date()));
 // 작은 창이 보던 날짜를 #overview?date=YYYY-MM-DD 로 넘겨준다
@@ -120,7 +130,7 @@ const selectedCounts = computed(() => {
 });
 
 onMounted(async () => {
-  await Promise.all([loadMonth(), selectedFile.load(), somedayFile.load()]);
+  await Promise.all([loadMonth(), selectedFile.load(), somedayFile.load(), loadSettings()]);
   watchDayChange(() => (today.value = toIsoDate(new Date())));
   window.addEventListener("blur", () => void saver.flush());
   // 창을 오갈 때마다 한 달 치를 읽지 않도록 2초에 한 번으로 묶는다
@@ -139,16 +149,17 @@ onMounted(async () => {
     void somedayFile.reloadIfChanged();
   }, 15_000);
   await onSelectDate((date) => select(date));
-  await onQuitRequested(() => saver.flush());
+  await onQuitRequested(() => saveNow());
   await onFileChanged(({ path }) => {
     if (path === selectedFile.path.value) void selectedFile.reloadIfChanged();
     if (path === somedayFile.path.value) void somedayFile.reloadIfChanged();
+    if (path === "settings.json") void loadSettings();
     const date = path.match(/^daily\/(\d{4}-\d{2}-\d{2})\.md$/)?.[1];
     if (date && date !== selected.value && grid.value.includes(date)) void readDay(date);
   });
   await onDataRootChanged(() => location.reload());
   await getCurrentWindow().onCloseRequested(async () => {
-    await saver.flush();
+    await saveNow();
   });
 });
 </script>
@@ -203,6 +214,8 @@ onMounted(async () => {
       <div class="side-list">
         <TodoList
           v-model="selectedFile.items.value"
+          ref="dayList"
+          :sort-checked="settings.sortChecked"
           list-key="overview"
           placeholder="이 날짜에 할 일 추가"
           :marker="drag.state.marker"
@@ -215,7 +228,9 @@ onMounted(async () => {
         <div class="side-list">
           <TodoList
             v-model="somedayFile.items.value"
-            list-key="someday"
+            ref="somedayList"
+            :sort-checked="settings.sortChecked"
+          list-key="someday"
             placeholder="언젠가 할 일 추가"
             :marker="drag.state.marker"
             :dragging-id="drag.state.draggingId"

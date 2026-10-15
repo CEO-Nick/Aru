@@ -1,0 +1,456 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Aru — 모든 창 위에, 오늘 할 일</title>
+<meta name="description" content="Aru는 맥 화면 맨 위에 떠 있는 작은 할 일 창이에요. 오늘 할 일과 언젠가 할 일을 한 창에." />
+<meta property="og:title" content="Aru — 모든 창 위에, 오늘 할 일" />
+<meta property="og:description" content="맥 화면 맨 위에 떠 있는 작은 할 일 창" />
+<meta property="og:image" content="icon.png" />
+<link rel="icon" href="favicon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css" />
+<style>
+  :root {
+    --night: #0c0d0f;
+    --dusk: #1a1c1f;
+    --ember: #ff8a3d;
+    --check: #0a84ff;
+    --paper: #f2eee8;
+    --haze: #8f9196;
+    --line: #ffffff14;
+    --sans: "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box }
+  html { scroll-behavior: smooth }
+  body {
+    margin: 0;
+    color: var(--paper);
+    font: 400 17px/1.7 var(--sans);
+    letter-spacing: -0.01em;
+    background: var(--night);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* 페이지 전체가 해 질 녘 하늘: 내려갈수록 지평선의 주황이 올라온다 */
+  .sky {
+    position: fixed; inset: 0; z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(70% 55% at 78% 30%, #ff8a3d14 0%, transparent 60%),
+      radial-gradient(60% 50% at 0% 0%, #ffffff08 0%, transparent 60%),
+      var(--night);
+  }
+  .horizon {
+    position: fixed; left: 0; right: 0; bottom: 0; height: 70vh; z-index: -1; pointer-events: none;
+    background: radial-gradient(80% 100% at 50% 125%, #ff8a3d 0%, #d0562a40 36%, transparent 70%);
+    opacity: var(--glow, 0.15);
+  }
+  a { color: inherit }
+  .wrap { max-width: 1120px; margin: 0 auto; padding-inline: 28px }
+
+  nav {
+    position: sticky; top: 0; z-index: 20;
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    background: linear-gradient(#0c0d0fd9, #0c0d0f80);
+    border-bottom: 1px solid var(--line);
+  }
+  nav .wrap { display: flex; align-items: center; gap: 28px; height: 60px }
+  .brand { display: flex; align-items: center; gap: 10px; text-decoration: none }
+  .brand img { width: 26px; height: 26px }
+  .brand span { font: 800 22px/1 var(--sans); letter-spacing: -0.04em }
+  nav .links { margin-left: auto; display: flex; gap: 24px; font-size: 14.5px; color: var(--haze) }
+  nav .links a { text-decoration: none }
+  nav .links a:hover { color: var(--paper) }
+
+  /* 첫 화면 */
+  .hero { min-height: calc(100vh - 60px); display: grid; grid-template-columns: 1.15fr 1fr; align-items: center; gap: 40px; padding-block: 40px 80px }
+  .eyebrow { font: 500 13px/1 var(--mono); color: var(--ember); letter-spacing: .04em; text-transform: uppercase }
+  h1 {
+    margin: 22px 0 26px;
+    font-size: clamp(48px, 7.4vw, 96px);
+    line-height: 1.04; font-weight: 800; letter-spacing: -0.045em;
+  }
+  h1 em { font-style: normal; color: var(--ember) }
+  .lede { max-width: 30em; color: #c9c6c0; font-size: 19px }
+  .cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 34px }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 600; font-size: 16px;
+    padding: 14px 22px; border-radius: 12px; border: 1px solid var(--line); transition: transform .15s ease, background .15s ease;
+  }
+  .btn:hover { transform: translateY(-1px) }
+  .btn.primary { background: var(--paper); color: var(--night); border-color: transparent }
+  .btn.primary:hover { background: #fff }
+  .btn.ghost:hover { background: #ffffff0d }
+  .btn svg { width: 18px; height: 18px }
+  .meta { margin-top: 16px; font: 13px var(--mono); color: var(--haze) }
+  .slot { width: 320px; height: 470px; justify-self: center; position: relative }
+  .slot .hint {
+    position: absolute; left: 50%; bottom: -58px; transform: translateX(-50%); white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 9px 16px 9px 13px; border-radius: 999px;
+    background: #ffffff0d; border: 1px solid #ffffff24;
+    font: 500 14.5px var(--sans); color: var(--paper);
+  }
+  .slot .hint .live { width: 8px; height: 8px; border-radius: 50%; background: var(--ember); box-shadow: 0 0 0 0 #ff8a3d99; animation: live 1.8s ease-out infinite }
+  .slot .hint .up { color: var(--ember); font-weight: 700 }
+  @keyframes live { 0% { box-shadow: 0 0 0 0 #ff8a3d99 } 70% { box-shadow: 0 0 0 8px #ff8a3d00 } 100% { box-shadow: 0 0 0 0 #ff8a3d00 } }
+  .hero-media { display: none; width: 100%; height: auto; margin-top: 36px; border-radius: 14px }
+
+  /* 페이지 위에 떠 있는 진짜 Aru 창 */
+  .float {
+    position: fixed; left: 0; top: 0; width: 320px; height: 470px; z-index: 30;
+    border-radius: 12px; overflow: hidden; transform-origin: top left;
+    box-shadow: 0 40px 90px #000000a0, 0 0 0 1px #ffffff26, 0 0 80px #ff8a3d1a;
+    will-change: transform, left, top;
+    opacity: var(--alpha, 1);
+    transition: opacity .25s ease;
+  }
+  /* 본문과 겹치면 맥에서 Aru를 흐리게 쓰듯 비켜 준다. 마우스를 올리면 다시 선명해진다 */
+  .float.yield { opacity: min(var(--alpha, 1), .18) }
+  .float.yield:hover, .float.yield:focus-within { opacity: var(--alpha, 1) }
+  .float iframe { width: 100%; height: 100%; border: 0; display: block; background: #262628 }
+  .float .lights { position: absolute; left: 12px; top: 11px; display: flex; gap: 8px }
+  .float .lights button { width: 12px; height: 12px; border-radius: 50%; border: 0; padding: 0; cursor: pointer }
+  .float .lights button:nth-child(1) { background: #ff5f57 }
+  .float .lights button:nth-child(2) { background: #febc2e }
+  .float .lights button:nth-child(3) { background: #28c840 }
+  .float .lights button:focus-visible { outline: 2px solid var(--paper); outline-offset: 2px }
+  .float[hidden] { display: none }
+  .reopen {
+    position: fixed; right: 24px; bottom: 24px; z-index: 30; display: none;
+    align-items: center; gap: 8px; padding: 10px 16px 10px 12px; border-radius: 999px;
+    background: #1a1c1fcc; backdrop-filter: blur(12px); border: 1px solid var(--line); color: var(--paper);
+    font: 600 14px var(--sans); cursor: pointer;
+  }
+  .reopen img { width: 22px; height: 22px }
+  .reopen.show { display: inline-flex }
+
+  /* 사용법 */
+  section { padding-block: 120px }
+  .section-head { max-width: 640px; margin-bottom: 72px }
+  h2 { margin: 16px 0 14px; font-size: clamp(34px, 4.6vw, 54px); line-height: 1.12; font-weight: 800; letter-spacing: -0.04em }
+  h2 em { font-style: normal; color: var(--ember) }
+  .section-head p { color: #c9c6c0; margin: 0 }
+
+  .feature { display: grid; grid-template-columns: 1fr 372px; gap: 64px; align-items: center; padding-block: 56px; border-top: 1px solid var(--line) }
+  .feature.flip { grid-template-columns: 372px 1fr }
+  .feature.flip .copy { order: 2 }
+  .key {
+    display: inline-flex; align-items: center; gap: 6px; font: 500 13px/1 var(--mono); color: var(--paper);
+    padding: 7px 10px; border-radius: 8px; background: #ffffff0f; border: 1px solid var(--line);
+  }
+  .feature h3 { margin: 18px 0 12px; font-size: 30px; line-height: 1.25; font-weight: 750; letter-spacing: -0.03em }
+  .feature p { margin: 0 0 14px; color: #c9c6c0 }
+  .feature ul { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 10px }
+  .feature li { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: baseline; font-size: 15.5px; color: #c9c6c0 }
+  kbd {
+    font: 500 12.5px/1 var(--mono); color: var(--paper); background: #ffffff12; border: 1px solid #ffffff22;
+    border-bottom-width: 2px; border-radius: 6px; padding: 4px 7px; white-space: nowrap;
+  }
+  .media img { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 24px 60px #00000070, 0 0 0 1px var(--line) }
+  .feature.wide { grid-template-columns: 1fr; gap: 36px }
+  .feature.wide .copy { max-width: 640px }
+
+  /* 자정 설정 세 가지 */
+  .modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px }
+  .modes figure { margin: 0 }
+  .modes img { display: block; width: 100%; height: auto; border-radius: 14px; box-shadow: 0 24px 60px #00000070, 0 0 0 1px var(--line) }
+  .modes figcaption { margin-top: 14px; display: grid; gap: 4px; font-size: 15px; color: #c9c6c0 }
+  .modes figcaption b { color: var(--paper); font-weight: 700; font-size: 17px }
+
+  /* 단축키 */
+  .keys { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0 48px; border-top: 1px solid var(--line) }
+  .keys div { display: flex; justify-content: space-between; gap: 18px; align-items: center; padding: 16px 2px; border-bottom: 1px solid var(--line); font-size: 15.5px; color: #c9c6c0 }
+  .keys span:last-child { display: flex; gap: 6px }
+
+  /* 파일 */
+  .files { display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: start }
+  .files p { color: #c9c6c0 }
+  pre {
+    margin: 0; padding: 26px 28px; border-radius: 14px; background: #121316; border: 1px solid var(--line);
+    font: 14px/1.85 var(--mono); color: #bdbab4; overflow-x: auto;
+  }
+  pre .dim { color: #5f6166 } pre .ok { color: var(--check) } pre .em { color: var(--ember) }
+
+  /* 설치 */
+  .install { position: relative; padding-block: 140px 80px; overflow: hidden }
+  .wordmark {
+    font: 800 clamp(150px, 28vw, 360px)/0.82 var(--sans); letter-spacing: -0.07em;
+    color: transparent; -webkit-text-stroke: 1px #ffffff24; text-align: center; margin: 0; user-select: none;
+  }
+  .install .panel {
+    position: relative; margin-top: -0.32em; max-width: 760px; margin-inline: auto; text-align: center;
+  }
+  .install h2 { margin-top: 0 }
+  .steps { list-style: none; padding: 0; margin: 44px auto 40px; max-width: 640px; text-align: left; counter-reset: s; display: grid; gap: 14px }
+  .steps li { counter-increment: s; display: grid; grid-template-columns: 34px 1fr; gap: 14px; color: #c9c6c0 }
+  .steps li::before {
+    content: counter(s); font: 500 13px/34px var(--mono); text-align: center; width: 34px; height: 34px;
+    border-radius: 50%; border: 1px solid var(--line); color: var(--paper);
+  }
+  .steps b { color: var(--paper); font-weight: 650 }
+  .install .cta { justify-content: center }
+
+  footer { border-top: 1px solid var(--line); padding-block: 28px 40px; color: var(--haze); font-size: 14px }
+  footer .wrap { display: flex; justify-content: space-between; gap: 18px; flex-wrap: wrap }
+
+  .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s ease, transform .7s ease }
+  .reveal.in { opacity: 1; transform: none }
+
+  a:focus-visible, button:focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; border-radius: 6px }
+
+  @media (max-width: 960px) {
+    .hero { grid-template-columns: 1fr; min-height: auto; padding-top: 56px }
+    .slot, .float, .reopen { display: none !important }
+    .hero-media { display: block; max-width: 372px }
+    .lede { font-size: 17px }
+    .feature, .feature.flip { grid-template-columns: 1fr; gap: 28px }
+    .feature.flip .copy { order: 0 }
+    .media { max-width: 420px }
+    .keys, .files, .modes { grid-template-columns: 1fr }
+    .modes figure { max-width: 372px }
+    nav .links a:not(.gh) { display: none }
+    section { padding-block: 80px }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto }
+    .reveal { opacity: 1; transform: none; transition: none }
+    .slot .hint .live { animation: none }
+    .btn { transition: none }
+  }
+</style>
+</head>
+<body>
+<div class="sky"></div>
+<div class="horizon" id="horizon"></div>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top" aria-label="Aru 처음으로"><img src="icon.png" alt="" /><span>Aru</span></a>
+    <div class="links">
+      <a href="#guide">기능</a>
+      <a href="#midnight">자정 설정</a>
+      <a href="#overview">캘린더</a>
+      <a href="#install">다운로드</a>
+      <a class="gh" href="https://github.com/CEO-Nick/Aru">GitHub</a>
+    </div>
+  </div>
+</nav>
+
+<main id="top">
+  <header class="wrap hero">
+    <div>
+      <div class="eyebrow">A to-do list for macOS</div>
+      <h1>모든 창 위에,<br /><em>오늘</em> 할 일.</h1>
+      <p class="lede">Aru는 맥 화면 맨 위에 떠 있는 작은 할 일 창이에요. 오늘 할 일과 언젠가 할 일을 한 창에 두고, 무슨 일을 하든 시야에서 놓치지 않게 해요.</p>
+      <div class="cta">
+        <a class="btn primary" href="download/Aru-mac.zip?v=202610150321" download>
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.7-1-2.7-4.1zM13.9 5c.7-.9 1.2-2 1.1-3.2-1 0-2.3.7-3 1.6-.7.8-1.3 2-1.1 3.1 1.1.1 2.3-.6 3-1.5z"/></svg>
+          macOS용 다운로드
+        </a>
+        <a class="btn ghost" href="#guide">기능 보기</a>
+      </div>
+      <div class="meta">무료 · Apple Silicon 맥 · 4.6MB</div>
+      <img class="hero-media" src="media/write.gif?v=202610150321" alt="Aru 창에서 할 일을 추가하고 체크하는 모습" />
+    </div>
+    <div class="slot" id="slot" aria-hidden="true"><div class="hint"><span class="live" aria-hidden="true"></span><span><span class="up">↑</span> 진짜 Aru예요. 체크하고, 적고, 투명도를 내려 보세요</span></div></div>
+  </header>
+
+  <section id="guide" class="wrap">
+    <div class="section-head reveal">
+      <div class="eyebrow">Features</div>
+      <h2>Aru가 하는 일</h2>
+      <p>위쪽은 오늘, 아래쪽은 언젠가. 창 하나에서 하루를 관리해요.</p>
+    </div>
+
+    <article class="feature reveal">
+      <div class="copy">
+        <span class="key">오늘 · 언젠가</span>
+        <h3>할 일 추가</h3>
+        <p>위쪽에는 오늘 할 일, 아래쪽에는 날짜와 상관없이 언젠가 할 일을 적어요. 적고 Enter를 누르면 추가되고, 체크박스를 누르면 끝낸 일이 돼요.</p>
+      </div>
+      <div class="media"><img src="media/write.gif?v=202610150321" alt="오늘 할 일을 입력해 추가하고 체크하는 모습" loading="lazy" width="372" height="530" /></div>
+    </article>
+
+    <article class="feature wide reveal">
+      <div class="copy">
+        <span class="key">⌥ Space</span>
+        <h3>어떤 앱에서든 빠르게 추가</h3>
+        <p>다른 앱을 쓰다가 할 일이 떠오르면 <kbd>⌥ Space</kbd>. 지금 보고 있는 화면에 입력창이 뜨고, 적고 Enter를 누르면 오늘 할 일에 들어가요. 입력창은 바로 닫히고 하던 앱으로 돌아가요. <kbd>Tab</kbd>을 누르면 언젠가 목록에 넣어요.</p>
+      </div>
+      <div class="media" style="max-width:none"><img src="media/quick.gif?v=202610150321" alt="코드 편집기를 보다가 단축키로 입력창을 띄워 할 일을 추가하자 옆 Aru 창에 바로 나타나는 모습" loading="lazy" width="940" height="500" /></div>
+    </article>
+
+    <article class="feature flip reveal">
+      <div class="copy">
+        <span class="key">◀ ▶</span>
+        <h3>지난 날과 다가올 날</h3>
+        <p>화살표로 하루씩 오가며 지난 날짜의 기록을 보고, 앞으로의 날짜에 할 일을 미리 적어 둘 수 있어요. 미리 적어 둔 일은 그날이 되면 오늘 목록에 나타나요.</p>
+      </div>
+      <div class="media"><img src="media/dates.gif?v=202610150321" alt="이전 날과 다음 날로 이동하고 미래 날짜에 할 일을 적는 모습" loading="lazy" width="372" height="530" /></div>
+    </article>
+
+    <article class="feature wide reveal" id="midnight">
+      <div class="copy">
+        <span class="key">00:00</span>
+        <h3>자정이 지나면, 남은 일은 설정대로</h3>
+        <p>자정이 지나면 위쪽이 새 날짜로 바뀌어요. 끝내지 못한 일을 어떻게 할지 설정에서 세 가지 중 골라요. 아래는 같은 할 일로 자정을 넘긴 결과예요. 며칠 동안 맥을 꺼 두었어도 다음에 켤 때 한 번에 정리해요.</p>
+      </div>
+      <div class="modes">
+        <figure>
+          <img src="media/midnight-keep.gif?v=202610150321" alt="그대로 남기기: 자정이 지나면 새 날은 빈 칸으로 시작하는 모습" loading="lazy" width="372" height="530" />
+          <figcaption><b>그대로 남기기</b><span>새 날은 빈 칸으로 시작해요. 남은 일은 그 날짜 기록에 그대로 있어요.</span></figcaption>
+        </figure>
+        <figure>
+          <img src="media/midnight-next.gif?v=202610150321" alt="다음 날로 옮기기: 미완료 할 일이 새 날로 넘어오는 모습" loading="lazy" width="372" height="530" />
+          <figcaption><b>다음 날로 옮기기</b><span>남은 일이 "10/14에서 넘어옴" 표시를 달고 새 날로 넘어와요.</span></figcaption>
+        </figure>
+        <figure>
+          <img src="media/midnight-someday.gif?v=202610150321" alt="언젠가로 옮기기: 미완료 할 일이 언젠가 목록으로 내려가는 모습" loading="lazy" width="372" height="530" />
+          <figcaption><b>언젠가로 옮기기</b><span>남은 일이 아래 언젠가 목록 끝으로 옮겨져요.</span></figcaption>
+        </figure>
+      </div>
+    </article>
+
+    <article class="feature wide reveal" id="overview">
+      <div class="copy">
+        <span class="key">캘린더</span>
+        <h3>한 달을 한눈에</h3>
+        <p>달력 버튼을 누르면 큰 창에 월 달력이 열려요. 날짜 칸마다 그날 할 일이 보이고, 날짜를 누르면 오른쪽에서 바로 고칠 수 있어요. 언젠가 할 일을 달력 칸에 끌어 놓으면 그 날짜로 옮겨져요.</p>
+      </div>
+      <div class="media" style="max-width:none"><img src="media/overview.gif?v=202610150321" alt="월 달력에서 날짜를 고르고 언젠가 할 일을 날짜 칸으로 끌어 옮기는 모습" loading="lazy" width="1180" height="760" /></div>
+    </article>
+
+    <article class="feature reveal">
+      <div class="copy">
+        <span class="key">고정 · 흐리게</span>
+        <h3>늘 위에, 그러나 가볍게</h3>
+        <p>핀이 켜져 있으면 어떤 창을 열어도 Aru가 맨 위에 떠 있어요. 핀을 누르면 고정이 풀려요.</p>
+        <p>슬라이더로 창을 흐리게 하면 뒤의 작업이 비쳐 보여요. 끝까지 내려도 희미하게 남아서 창을 잃어버리지 않아요.</p>
+      </div>
+      <div class="media"><img src="media/window.gif?v=202610150321" alt="투명도 슬라이더를 내려 뒤의 편집기가 비쳐 보이고 핀으로 고정을 켜고 끄는 모습" loading="lazy" width="372" height="530" /></div>
+    </article>
+  </section>
+
+  <section id="files" class="wrap">
+    <div class="files">
+      <div class="reveal">
+        <div class="eyebrow">Your files</div>
+        <h2>할 일은<br />내 맥의 <em>텍스트</em> 파일로</h2>
+        <p>서버도 계정도 없어요. 적는 대로 알아서 저장하고, 날짜마다 마크다운 파일 하나로 남겨서 Obsidian이나 메모장으로 열어도 그대로 읽혀요.</p>
+        <p>설정에서 저장 폴더를 Dropbox나 iCloud Drive로 바꾸면 다른 맥과 함께 쓸 수 있어요. 빈 폴더를 고르면 지금까지의 할 일을 가져가요.</p>
+      </div>
+      <pre class="reveal" aria-label="저장 폴더 구조 예시"><span class="dim">저장 폴더/   설정 → Finder에서 열기</span>
+├── daily/
+│   ├── 2026-10-13.md
+│   └── <span class="em">2026-10-14.md</span>
+├── someday.md
+└── settings.json
+
+<span class="dim"># 2026-10-14.md</span>
+- [<span class="ok">x</span>] 메일 확인
+- [ ] 디자인 리뷰 준비
+- [ ] 회의록 정리 <span class="dim">&lt;!-- from:2026-10-13 --&gt;</span></pre>
+    </div>
+  </section>
+
+  <section id="install" class="install">
+    <p class="wordmark" aria-hidden="true">Aru</p>
+    <div class="panel wrap reveal">
+      <div class="eyebrow">Install</div>
+      <h2>지금 띄워 보세요</h2>
+      <ol class="steps">
+        <li><span><b>내려받아요.</b> 압축 파일을 풀면 Aru.app이 나와요.</span></li>
+        <li><span><b>응용 프로그램 폴더로 옮겨요.</b> Launchpad나 Spotlight에서 "Aru"로 찾을 수 있어요.</span></li>
+        <li><span><b>처음 한 번은 우클릭 → 열기.</b> 개인이 만든 앱이라 Apple 인증서가 없어서, 처음 열 때만 확인 창이 떠요. "열기"를 누르면 다음부터는 바로 열려요.</span></li>
+      </ol>
+      <div class="cta">
+        <a class="btn primary" href="download/Aru-mac.zip?v=202610150321" download>macOS용 다운로드</a>
+        <a class="btn ghost" href="https://github.com/CEO-Nick/Aru">소스 코드</a>
+      </div>
+      <div class="meta">Apple Silicon 맥 · 무료</div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Aru — 늘 곁에 떠 있는 할 일</span>
+    <a href="https://github.com/CEO-Nick/Aru">github.com/CEO-Nick/Aru</a>
+  </div>
+</footer>
+
+<div class="float" id="float">
+  <iframe src="demo/index.html?v=202610150321" title="Aru 데모 — 직접 써 볼 수 있어요"></iframe>
+  <div class="lights">
+    <button type="button" id="close" aria-label="데모 창 닫기"></button>
+    <button type="button" id="mini" aria-label="데모 창 닫기"></button>
+    <button type="button" id="zoom" aria-label="사용법으로 이동"></button>
+  </div>
+</div>
+<button class="reopen" id="reopen" type="button"><img src="icon.png" alt="" />Aru 다시 띄우기</button>
+
+<script>
+  const float = document.getElementById("float");
+  const slot = document.getElementById("slot");
+  const reopen = document.getElementById("reopen");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const DOCK_SCALE = 0.7, GAP = 24;
+  const avoid = [...document.querySelectorAll(".copy, .media, .modes figure, pre, .section-head, .install .panel, footer .wrap")];
+  const overlaps = (a, b) => a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top;
+
+  // 첫 화면 자리에서 시작해, 스크롤하면 오른쪽 아래로 내려앉아 계속 페이지 위에 떠 있는다
+  function place() {
+    const r = slot.getBoundingClientRect();
+    const vw = innerWidth, vh = innerHeight;
+    const dock = { x: vw - 320 * DOCK_SCALE - GAP, y: vh - 470 * DOCK_SCALE - GAP };
+    let t = Math.min(1, Math.max(0, (scrollY) / (r.height * 0.9 + 1)));
+    if (reduce) t = scrollY > 40 ? 1 : 0;
+    const e = t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+    const x = r.left + (dock.x - r.left) * e;
+    const y = r.top + (dock.y - r.top) * e;
+    const s = 1 + (DOCK_SCALE - 1) * e;
+    float.style.transform = `translate(${x}px, ${y}px) scale(${s})`;
+    const box = { left: x, top: y, right: x + 320 * s, bottom: y + 470 * s };
+    const covering = e > 0.6 && avoid.some((el) => {
+      const r = el.getBoundingClientRect();
+      return r.bottom > 0 && r.top < vh && overlaps(box, r);
+    });
+    float.classList.toggle("yield", covering);
+    const doc = document.documentElement;
+    const p = scrollY / Math.max(1, doc.scrollHeight - vh);
+    document.getElementById("horizon").style.setProperty("--glow", (0.12 + p * 0.75).toFixed(3));
+  }
+  let ticking = false;
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => { place(); ticking = false; });
+  };
+  addEventListener("scroll", onScroll, { passive: true });
+  addEventListener("resize", onScroll);
+  place();
+
+  // 데모 창 안의 투명도 슬라이더가 이 페이지 위의 창을 흐리게 한다
+  addEventListener("message", (e) => {
+    if (e.data?.type === "opacity") float.style.setProperty("--alpha", e.data.alpha);
+    if (e.data?.type === "open-overview") document.getElementById("overview").scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
+  });
+
+  const hide = () => { float.hidden = true; reopen.classList.add("show"); };
+  document.getElementById("close").onclick = hide;
+  document.getElementById("mini").onclick = hide;
+  document.getElementById("zoom").onclick = () => document.getElementById("guide").scrollIntoView({ behavior: reduce ? "auto" : "smooth" });
+  reopen.onclick = () => { float.hidden = false; reopen.classList.remove("show"); place(); };
+
+  const io = new IntersectionObserver((entries) => {
+    for (const en of entries) if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); }
+  }, { rootMargin: "0px 0px -10% 0px" });
+  document.querySelectorAll(".reveal").forEach((el) => io.observe(el));
+</script>
+</body>
+</html>

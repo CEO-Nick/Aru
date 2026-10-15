@@ -4,12 +4,86 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
+use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri::menu::{Menu, MenuBuilder, MenuItem, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{
     App, AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
     Window,
 };
+
+/// 빠른 입력창을 띄우기 직전에 쓰던 앱. 입력창을 닫으면 그 앱으로 돌려보낸다
+#[derive(Default)]
+struct QuickState(Mutex<Option<i32>>);
+
+const QUICK_WIDTH: f64 = 620.0;
+const QUICK_HEIGHT: f64 = 96.0;
+
+/// 전역 단축키(⌥Space)로 지금 보고 있는 화면 위쪽 가운데에 빠른 입력창을 띄운다. 이미 떠 있으면 닫는다
+fn toggle_quick(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("quick") {
+        if window.is_visible().unwrap_or(false) {
+            hide_quick(app.clone());
+            return;
+        }
+    }
+    *app.state::<QuickState>().0.lock().unwrap() = platform::frontmost_other_app();
+    let window = match app.get_webview_window("quick") {
+        Some(w) => w,
+        None => match WebviewWindowBuilder::new(app, "quick", WebviewUrl::App("index.html#quick".into()))
+            .title("Aru 빠른 입력")
+            .inner_size(QUICK_WIDTH, QUICK_HEIGHT)
+            .decorations(false)
+            .transparent(true)
+            .shadow(false)
+            .resizable(false)
+            .always_on_top(true)
+            .visible_on_all_workspaces(true)
+            .skip_taskbar(true)
+            .visible(false)
+            .build()
+        {
+            Ok(w) => w,
+            Err(e) => {
+                trace(&format!("quick window: {e}"));
+                return;
+            }
+        },
+    };
+    place_on_cursor_screen(app, &window);
+    trace("show_quick");
+    let _ = window.show();
+    let _ = window.set_focus();
+    let _ = app.emit_to("quick", "quick-shown", ());
+}
+
+// 마우스가 있는 화면 위쪽 1/4 지점 가운데에 둔다
+fn place_on_cursor_screen(app: &AppHandle, window: &WebviewWindow) {
+    let Ok(cursor) = app.cursor_position() else { return };
+    let Ok(monitors) = app.available_monitors() else { return };
+    let monitor = monitors.iter().find(|m| {
+        let (p, s) = (m.position(), m.size());
+        cursor.x >= p.x as f64 && cursor.x < (p.x + s.width as i32) as f64
+            && cursor.y >= p.y as f64 && cursor.y < (p.y + s.height as i32) as f64
+    });
+    let Some(m) = monitor.or(monitors.first()) else { return };
+    let scale = m.scale_factor();
+    let (p, s) = (m.position(), m.size());
+    let x = p.x as f64 + (s.width as f64 - QUICK_WIDTH * scale) / 2.0;
+    let y = p.y as f64 + s.height as f64 * 0.24;
+    let _ = window.set_position(tauri::PhysicalPosition::new(x, y));
+}
+
+#[tauri::command]
+fn hide_quick(app: AppHandle) {
+    trace("hide_quick");
+    if let Some(window) = app.get_webview_window("quick") {
+        let _ = window.hide();
+    }
+    if let Some(pid) = app.state::<QuickState>().0.lock().unwrap().take() {
+        platform::activate_app(pid);
+    }
+}
 
 /// 종료 요청 뒤 아직 저장을 마치지 않은 창들
 #[derive(Default)]
@@ -136,7 +210,8 @@ fn quit_ready(app: AppHandle, window: Window, state: tauri::State<QuitState>) {
 
 // 열린 창마다 저장 대기분을 마저 쓰고 quit_ready를 부른다. 모두 응답하면 끄고, 응답이 없어도 2초 뒤엔 끈다
 fn request_quit(app: &AppHandle) {
-    let labels: HashSet<String> = app.webview_windows().into_keys().collect();
+    // 빠른 입력창은 저장할 게 없어서 기다리지 않는다
+    let labels: HashSet<String> = app.webview_windows().into_keys().filter(|l| l != "quick").collect();
     if labels.is_empty() {
         app.exit(0);
         return;
@@ -216,6 +291,39 @@ fn build_tray(app: &App) -> tauri::Result<()> {
     Ok(())
 }
 
+/// 화면 자동 점검용 옵션. 개발 빌드에서만 들어간다(설치본에는 이 함수 자체가 없다)
+/// - FT_SWITCH_ROOT=<폴더>: 6초 뒤 저장 폴더 변경을 실제 경로 그대로 실행한다
+/// - FT_OPEN_QUICK=1: 4초 뒤 단축키를 누른 것처럼 빠른 입력창을 띄운다
+/// - FT_OPEN_OVERVIEW=1(또는 YYYY-MM-DD): 모아보기 창을 바로 연다
+#[cfg(debug_assertions)]
+fn dev_hooks(app: &App) -> Result<(), String> {
+    if let Ok(target) = std::env::var("FT_SWITCH_ROOT") {
+        let handle = app.handle().clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(6));
+            let result = set_data_root(handle, target);
+            trace(&format!("switch-root {result:?}"));
+        });
+    }
+    if std::env::var("FT_OPEN_QUICK").is_ok() {
+        let handle = app.handle().clone();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_secs(4));
+            let h = handle.clone();
+            let _ = handle.run_on_main_thread(move || toggle_quick(&h));
+        });
+    }
+    if let Ok(value) = std::env::var("FT_OPEN_OVERVIEW") {
+        let date = (value.len() == 10).then_some(value);
+        open_overview(app.handle().clone(), date)?;
+        // 터미널이 전체화면 Space에 있으면 새 창이 다른 데스크톱에 열려 캡처되지 않는다
+        if let Some(w) = app.get_webview_window("overview") {
+            let _ = w.set_visible_on_all_workspaces(true);
+        }
+    }
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -223,10 +331,25 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        // 빠른 입력창은 늘 마우스가 있는 화면에 띄우므로 위치를 기억하지 않는다
+        .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["quick"]).build())
         .manage(QuitState::default())
+        .manage(QuickState::default())
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, _shortcut, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        toggle_quick(app);
+                    }
+                })
+                .build(),
+        )
         .setup(|app| {
             build_tray(app)?;
+            // 다른 앱이 이미 쓰고 있어 등록에 실패해도 앱은 그대로 쓴다
+            if let Err(e) = app.global_shortcut().register(quick_shortcut()) {
+                trace(&format!("단축키 등록 실패: {e}"));
+            }
             let menu = build_app_menu(app)?;
             app.set_menu(menu)?;
             app.on_menu_event(|app, event| {
@@ -234,25 +357,8 @@ pub fn run() {
                     request_quit(app);
                 }
             });
-            // 화면 자동 점검용: 개발 빌드에서 FT_OPEN_OVERVIEW=1(또는 YYYY-MM-DD) 이면 모아보기 창도 바로 연다
             #[cfg(debug_assertions)]
-            // 화면 자동 점검용: FT_SWITCH_ROOT=<폴더> 면 6초 뒤 저장 폴더 변경을 실제 경로 그대로 실행한다
-            if let Ok(target) = std::env::var("FT_SWITCH_ROOT") {
-                let handle = app.handle().clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(Duration::from_secs(6));
-                    let result = set_data_root(handle, target);
-                    trace(&format!("switch-root {result:?}"));
-                });
-            }
-            if let Ok(value) = std::env::var("FT_OPEN_OVERVIEW") {
-                let date = (value.len() == 10).then_some(value);
-                open_overview(app.handle().clone(), date)?;
-                // 터미널이 전체화면 Space에 있으면 새 창이 다른 데스크톱에 열려 캡처되지 않는다
-                if let Some(w) = app.get_webview_window("overview") {
-                    let _ = w.set_visible_on_all_workspaces(true);
-                }
-            }
+            dev_hooks(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -260,6 +366,7 @@ pub fn run() {
             read_text,
             write_text,
             quit_ready,
+            hide_quick,
             open_overview,
             get_data_root,
             set_data_root
@@ -274,9 +381,13 @@ pub fn run() {
         });
 }
 
+fn quick_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::ALT), Code::Space)
+}
+
 #[cfg(target_os = "macos")]
 mod platform {
-    use objc2_app_kit::NSWindow;
+    use objc2_app_kit::{NSApplicationActivationOptions, NSRunningApplication, NSWindow, NSWorkspace};
     use tauri::WebviewWindow;
 
     // NSWindow는 메인 스레드에서만 건드릴 수 있다
@@ -296,6 +407,19 @@ mod platform {
     pub fn set_opacity(window: &WebviewWindow, alpha: f64) -> tauri::Result<()> {
         with_ns_window(window, move |w| w.setAlphaValue(alpha))
     }
+
+    /// 지금 앞에 있는 앱(Aru 자신은 빼고)
+    pub fn frontmost_other_app() -> Option<i32> {
+        let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
+        let pid = app.processIdentifier();
+        (pid != NSRunningApplication::currentApplication().processIdentifier()).then_some(pid)
+    }
+
+    pub fn activate_app(pid: i32) {
+        if let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
+            app.activateWithOptions(NSApplicationActivationOptions::empty());
+        }
+    }
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -305,4 +429,10 @@ mod platform {
     pub fn set_opacity(_window: &WebviewWindow, _alpha: f64) -> tauri::Result<()> {
         Ok(())
     }
+
+    pub fn frontmost_other_app() -> Option<i32> {
+        None
+    }
+
+    pub fn activate_app(_pid: i32) {}
 }

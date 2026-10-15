@@ -2,7 +2,7 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Capability for the main window",
-  "windows": ["main", "overview"],
+  "windows": ["main", "overview", "quick"],
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Aru 녹화 무대</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(110% 80% at 80% 115%, #ff8a3d4d 0%, transparent 55%),
+      linear-gradient(170deg, #17181b 0%, #1d1f23 55%, #2a211c 100%);
+    font: 13px/1.7 "SF Mono", Menlo, monospace;
+  }
+  /* 뒤에 깔린 편집기 창. 투명도를 낮추면 이게 비친다 */
+  .editor {
+    position: absolute; left: 18px; top: 40px; right: 18px; bottom: 22px;
+    background: #1b1c1fcc; border: 1px solid #ffffff14; border-radius: 12px;
+    color: #9aa3b8; padding: 40px 22px 0; white-space: pre; overflow: hidden;
+  }
+  .editor b { color: #e6a26b; font-weight: 400 } .editor i { color: #7fd1b9; font-style: normal } .editor u { color: #ffb86b; text-decoration: none }
+  .menubar {
+    position: absolute; left: 0; right: 0; top: 0; height: 24px; display: flex; align-items: center;
+    justify-content: flex-end; gap: 14px; padding: 0 14px; background: #0c0d0f99; backdrop-filter: blur(10px);
+    color: #e8e8ee; font: 500 12px -apple-system, "Apple SD Gothic Neo", sans-serif; font-variant-numeric: tabular-nums;
+  }
+  .menubar .app { margin-right: auto; font-weight: 700 }
+  .win {
+    position: absolute; right: 26px; top: 34px; width: 320px; height: 470px;
+    border-radius: 12px; overflow: hidden;
+    box-shadow: 0 30px 70px #00000080, 0 0 0 1px #ffffff1f;
+    transition: opacity .12s linear;
+  }
+  .win iframe { width: 100%; height: 100%; border: 0; display: block; background: #262628 }
+  .lights { position: absolute; left: 12px; top: 11px; display: flex; gap: 8px; pointer-events: none }
+  .lights i { width: 12px; height: 12px; border-radius: 50% }
+  .lights i:nth-child(1) { background: #ff5f57 } .lights i:nth-child(2) { background: #febc2e } .lights i:nth-child(3) { background: #28c840 }
+</style>
+</head>
+<body>
+<div class="menubar"><span class="app"></span><span id="clock"></span></div>
+<div class="editor"><b>export</b> <b>function</b> <i>planWeek</i>(tasks) {
+  <b>const</b> today = tasks.<i>filter</i>(t =&gt; t.due === <u>"today"</u>)
+  <b>const</b> someday = tasks.<i>filter</i>(t =&gt; !t.due)
+  <b>return</b> { today, someday }
+}
+
+<b>describe</b>(<u>"planWeek"</u>, () =&gt; {
+  <i>it</i>(<u>"keeps someday tasks out of today"</u>, () =&gt; {
+    <b>const</b> week = <i>planWeek</i>(fixtures)
+    <i>expect</i>(week.today).<i>toHaveLength</i>(<u>3</u>)
+  })
+})
+
+<b>async</b> <b>function</b> <i>syncNotes</i>(vault) {
+  <b>for</b> (<b>const</b> file <b>of</b> <b>await</b> vault.<i>list</i>(<u>"daily/"</u>)) {
+    <b>await</b> <i>index</i>(file)
+  }
+}</div>
+<div class="win" id="win">
+  <iframe id="app" src="/index.html"></iframe>
+  <div class="lights"><i></i><i></i><i></i></div>
+</div>
+<script>
+  const days = ["일", "월", "화", "수", "목", "금", "토"];
+  const tick = () => {
+    const d = new Date();
+    const h = d.getHours();
+    const pad = (n) => String(n).padStart(2, "0");
+    document.getElementById("clock").textContent =
+      `${d.getMonth() + 1}월 ${d.getDate()}일 (${days[d.getDay()]}) ${h < 12 ? "오전" : "오후"} ${h % 12 || 12}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  };
+  tick();
+  setInterval(tick, 250);
+  // 앱 안의 투명도 요청을 창 투명도로 보여 준다
+  addEventListener("message", (e) => {
+    if (e.data?.type === "opacity") document.getElementById("win").style.opacity = e.data.alpha;
+  });
+</script>
+</body>
+</html>
