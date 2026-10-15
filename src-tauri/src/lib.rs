@@ -93,7 +93,14 @@ struct QuitState(Mutex<Option<HashSet<String>>>, AtomicBool);
 
 /// 찾아 둔 새 버전. 창이 이벤트를 듣기 전에 찾았을 수 있어서 남겨 두고 물으면 알려 준다
 #[derive(Default)]
-struct UpdateState(Mutex<Option<String>>);
+struct UpdateState(Mutex<Option<UpdateInfo>>);
+
+/// 새 버전과 배포할 때 적어 둔 바뀐 점
+#[derive(Clone, serde::Serialize)]
+struct UpdateInfo {
+    version: String,
+    notes: String,
+}
 
 const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
@@ -240,20 +247,13 @@ fn request_quit(app: &AppHandle) {
     });
 }
 
-async fn check_update(app: &AppHandle) {
-    let update = match app.updater() {
-        Ok(updater) => updater.check().await,
-        Err(e) => Err(e),
-    };
-    match update {
-        Ok(Some(update)) => {
-            *app.state::<UpdateState>().0.lock().unwrap() = Some(update.version.clone());
-            let _ = app.emit("update-available", update.version);
-        }
-        Ok(None) => {}
-        // 오프라인이거나 GitHub이 응답하지 않으면 다음 확인 때 다시 본다
-        Err(e) => trace(&format!("업데이트 확인 실패: {e}")),
-    }
+async fn check_update(app: &AppHandle) -> Result<Option<UpdateInfo>, String> {
+    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    let Some(update) = update else { return Ok(None) };
+    let info = UpdateInfo { version: update.version, notes: update.body.unwrap_or_default() };
+    *app.state::<UpdateState>().0.lock().unwrap() = Some(info.clone());
+    let _ = app.emit("update-available", info.clone());
+    Ok(Some(info))
 }
 
 fn watch_updates(app: &AppHandle) {
@@ -263,13 +263,21 @@ fn watch_updates(app: &AppHandle) {
     }
     let app = app.clone();
     std::thread::spawn(move || loop {
-        tauri::async_runtime::block_on(check_update(&app));
+        // 오프라인이거나 GitHub이 응답하지 않으면 다음 확인 때 다시 본다
+        if let Err(e) = tauri::async_runtime::block_on(check_update(&app)) {
+            trace(&format!("업데이트 확인 실패: {e}"));
+        }
         std::thread::sleep(UPDATE_CHECK_INTERVAL);
     });
 }
 
 #[tauri::command]
-fn pending_update(state: tauri::State<UpdateState>) -> Option<String> {
+async fn check_update_now(app: AppHandle) -> Result<Option<UpdateInfo>, String> {
+    check_update(&app).await
+}
+
+#[tauri::command]
+fn pending_update(state: tauri::State<UpdateState>) -> Option<UpdateInfo> {
     state.0.lock().unwrap().clone()
 }
 
@@ -438,6 +446,7 @@ pub fn run() {
             get_data_root,
             set_data_root,
             pending_update,
+            check_update_now,
             install_update
         ])
         .build(tauri::generate_context!())

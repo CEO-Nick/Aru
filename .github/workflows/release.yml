@@ -2,6 +2,7 @@ name: Release
 
 # v0.2.0 같은 태그를 올리면 맥 앱을 빌드·서명해 GitHub Releases에 올린다.
 # 설치된 앱은 latest.json을 보고 새 버전을 찾는다.
+# 바뀐 점은 태그 메시지에 "- 항목" 줄로 적는다(git tag -a v0.2.2 -F notes.md). 앱의 설정 화면과 버튼 툴팁에 그대로 보인다.
 on:
   push:
     tags: ["v*"]
@@ -28,6 +29,17 @@ jobs:
 
       - run: npm ci
 
+      # checkout은 태그 이름만 가져와서 태그 메시지(바뀐 점)를 따로 받아 온다
+      - name: Read release notes
+        id: notes
+        run: |
+          git fetch --force origin "refs/tags/${GITHUB_REF_NAME}:refs/tags/${GITHUB_REF_NAME}"
+          {
+            echo "body<<__NOTES__"
+            git tag -l --format='%(contents)' "${GITHUB_REF_NAME}" | sed '/-----BEGIN PGP/,$d'
+            echo "__NOTES__"
+          } >> "$GITHUB_OUTPUT"
+
       - run: npm test
 
       - uses: tauri-apps/tauri-action@v0
@@ -38,7 +50,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Aru ${{ github.ref_name }}
-          releaseBody: 앱을 켜 두면 창 아래에 업데이트 버튼이 뜹니다. 처음 설치는 Aru-mac.zip을 받으세요.
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
 

@@ -48,7 +48,13 @@
           if (window.parent !== window) window.parent.postMessage({ type: "hide-quick" }, "*");
           return null;
         case "pending_update":
-          return window.__pendingUpdate ?? null;
+          return window.__asUpdate(window.__pendingUpdate);
+        case "check_update_now":
+          await new Promise((r) => setTimeout(r, window.__checkDelay ?? 0));
+          if (window.__failCheck) throw "연결 실패(모의)";
+          return window.__asUpdate(window.__checkResult);
+        case "plugin:app|version":
+          return "0.2.1";
         case "install_update":
           await new Promise((r) => setTimeout(r, window.__installDelay ?? 0));
           if (window.__failInstall) throw "내려받기 실패(모의)";
@@ -69,6 +75,9 @@
     },
   };
   window.__TAURI_EVENT_PLUGIN_INTERNALS__ = { unregisterListener() {} };
+
+  // 테스트에선 버전만 줘도 되게 한다. 실제 앱은 { version, notes }를 준다
+  window.__asUpdate = (u) => (u == null ? null : typeof u === "string" ? { version: u, notes: "" } : u);
 
   window.__emit = (event, payload) => {
     for (const id of window.__listeners[event] || []) {

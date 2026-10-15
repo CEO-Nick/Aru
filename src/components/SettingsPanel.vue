@@ -56,7 +56,7 @@ const OPTIONS: { value: CarryOver; title: string; hint: string }[] = [
     >
       <span>
         <b>아래로 보내기</b>
-        <small>체크하고 1초 뒤 끝낸 일들 맨 위로 옮긴다. 그 사이 다시 누르면 취소된다.</small>
+        <small>체크하고 0.5초 뒤 끝낸 일들 맨 위로 옮긴다. 그 사이 다시 누르면 취소된다.</small>
       </span>
       <span class="switch" :class="{ on: sortChecked }"><i></i></span>
     </div>

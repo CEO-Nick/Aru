@@ -343,23 +343,24 @@ describe("TodoList", () => {
     ];
     const order = (w: ReturnType<typeof mountList>) => current(w).map((t) => t.id);
 
-    it("켜져 있으면 체크하고 1초 뒤 끝낸 일들의 맨 위로 옮긴다", async () => {
+    it("켜져 있으면 체크하고 0.5초 뒤 끝낸 일들의 맨 위로 옮긴다", async () => {
       vi.useFakeTimers();
       const wrapper = mountList(list(), { sortChecked: true });
       await wrapper.findAll(".item .box")[0].trigger("click");
       expect(current(wrapper)[0].done).toBe(true);
+      await vi.advanceTimersByTimeAsync(400);
       expect(order(wrapper)).toEqual(["a", "b", "x"]);
-      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(100);
       expect(order(wrapper)).toEqual(["b", "a", "x"]);
       vi.useRealTimers();
     });
 
-    it("1초 안에 다시 누르면 옮기지 않고 체크도 풀린다", async () => {
+    it("0.5초 안에 다시 누르면 옮기지 않고 체크도 풀린다", async () => {
       vi.useFakeTimers();
       const wrapper = mountList(list(), { sortChecked: true });
       const box = () => wrapper.findAll(".item .box")[0];
       await box().trigger("click");
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(300);
       await box().trigger("click");
       await vi.advanceTimersByTimeAsync(2000);
       expect(order(wrapper)).toEqual(["a", "b", "x"]);
@@ -367,11 +368,11 @@ describe("TodoList", () => {
       vi.useRealTimers();
     });
 
-    it("체크를 풀면 1초 뒤 남은 일들의 맨 아래로 올라온다", async () => {
+    it("체크를 풀면 0.5초 뒤 남은 일들의 맨 아래로 올라온다", async () => {
       vi.useFakeTimers();
       const wrapper = mountList([...list(), { id: "y", text: "또 끝낸 일", done: true }], { sortChecked: true });
       await wrapper.findAll(".item .box")[3].trigger("click");
-      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(500);
       expect(order(wrapper)).toEqual(["a", "b", "y", "x"]);
       vi.useRealTimers();
     });

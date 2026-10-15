@@ -176,20 +176,20 @@ export default async function (browser) {
     await context.close();
   });
 
-  await scenario("체크하면 1초 뒤 끝낸 일들 맨 위로 내려가고 파일 순서도 바뀐다, 그 사이 다시 누르면 취소된다", async () => {
+  await scenario("체크하면 0.5초 뒤 끝낸 일들 맨 위로 내려가고 파일 순서도 바뀐다, 그 사이 다시 누르면 취소된다", async () => {
     const { page, context } = await openApp(browser, {
       files: { "daily/2026-10-14.md": "- [ ] 하나\n- [ ] 둘\n- [ ] 셋\n- [x] 어제 끝낸 일\n" },
     });
     const box = (text) => page.locator('[data-list="today"] .item', { hasText: text }).locator(".box");
     await box("하나").click();
-    await page.clock.runFor(500);
+    await page.clock.runFor(400);
     assert.deepEqual(await texts(page, "today"), ["하나", "둘", "셋", "어제 끝낸 일"]);
-    await page.clock.runFor(600);
+    await page.clock.runFor(150);
     assert.deepEqual(await texts(page, "today"), ["둘", "셋", "하나", "어제 끝낸 일"]);
     assert.equal((await fs(page))["daily/2026-10-14.md"], "- [ ] 둘\n- [ ] 셋\n- [x] 하나\n- [x] 어제 끝낸 일\n");
 
     await box("둘").click();
-    await page.clock.runFor(400);
+    await page.clock.runFor(250);
     await box("둘").click();
     await page.clock.runFor(2000);
     assert.deepEqual(await texts(page, "today"), ["둘", "셋", "하나", "어제 끝낸 일"]);

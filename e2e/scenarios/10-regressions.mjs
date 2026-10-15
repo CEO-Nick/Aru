@@ -350,7 +350,7 @@ export default async function (browser) {
     await page.clock.runFor(1);
     await page.evaluate(() => window.dispatchEvent(new Event("focus")));
     await page.clock.runFor(16_000);
-    // 체크한 "하나"는 1초 뒤 끝낸 일 쪽(아래)으로 옮겨진다
+    // 체크한 "하나"는 0.5초 뒤 끝낸 일 쪽(아래)으로 옮겨진다
     assert.deepEqual(await texts(page, "today"), ["둘 추가", "하나"]);
     assert.equal((await fs(page))[TODAY], "- [ ] 둘 추가\n- [x] 하나\n");
     await context.close();

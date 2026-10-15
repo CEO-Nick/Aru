@@ -20,13 +20,16 @@ export async function startServer() {
 
 export async function openApp(
   browser,
-  { files = {}, now = "2026-10-14T10:00:00", hash = "", viewport = { width: 320, height: 470 }, pendingUpdate = null } = {},
+  { files = {}, now = "2026-10-14T10:00:00", hash = "", viewport = { width: 320, height: 470 }, pendingUpdate = null, storage = {} } = {},
 ) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
   await page.clock.install({ time: new Date(now) });
   await page.addInitScript(`window.__initialFiles = ${JSON.stringify(files)};`);
   await page.addInitScript(`window.__pendingUpdate = ${JSON.stringify(pendingUpdate)};`);
+  await page.addInitScript(
+    `for (const [k, v] of Object.entries(${JSON.stringify(storage)})) localStorage.setItem(k, v);`,
+  );
   await page.addInitScript(mockScript);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));

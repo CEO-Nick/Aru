@@ -15,7 +15,7 @@ import {
 const items = defineModel<TodoItem[]>({ required: true });
 const props = defineProps<{
   placeholder: string;
-  /** 체크하면 1초 뒤 끝낸 일들 위로 옮긴다(설정) */
+  /** 체크하면 0.5초 뒤 끝낸 일들 위로 옮긴다(설정) */
   sortChecked?: boolean;
   listKey?: string;
   marker?: DropMarker | null;
@@ -255,8 +255,8 @@ function mergeIntoPrevious(event: KeyboardEvent, item: TodoItem) {
   focusItem(previous.id, joint.length);
 }
 
-// 체크하고 바로 옮기면 잘못 눌렀을 때 할 일이 눈앞에서 사라진다. 1초 기다렸다 옮기고, 그 사이 다시 누르면 취소한다
-const SETTLE_DELAY_MS = 1000;
+// 체크하고 바로 옮기면 잘못 눌렀을 때 할 일이 눈앞에서 사라진다. 0.5초 기다렸다 옮기고, 그 사이 다시 누르면 취소한다
+const SETTLE_DELAY_MS = 500;
 const settling = new Map<string, ReturnType<typeof setTimeout>>();
 
 function onToggle(item: TodoItem) {

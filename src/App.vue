@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { computed, onMounted, ref, watch } from "vue";
+import AboutSection from "./components/AboutSection.vue";
 import DateBar from "./components/DateBar.vue";
 import SaveStatusBar from "./components/SaveStatus.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import TitleBar from "./components/TitleBar.vue";
 import TodoList from "./components/TodoList.vue";
 import UpdateButton from "./components/UpdateButton.vue";
+import UpdatedNotice from "./components/UpdatedNotice.vue";
 import { watchDayChange } from "./composables/useDayWatcher";
 import { useListDrag } from "./composables/useListDrag";
 import { dayPath, rollover } from "./composables/useRollover";
@@ -173,6 +175,7 @@ onMounted(async () => {
         @reveal-folder="revealDataRoot"
         @close="showSettings = false"
       />
+      <AboutSection />
     </main>
     <main v-show="!showSettings" ref="body" class="body">
       <section class="pane today" :style="{ flexBasis: `${settings.splitRatio * 100}%` }">
@@ -204,12 +207,15 @@ onMounted(async () => {
       </section>
     </main>
     <SaveStatusBar :status="saveStatus" :saved-at="savedAt">
-      <UpdateButton />
+      <span class="foot-end"><UpdatedNotice /><UpdateButton /></span>
     </SaveStatusBar>
   </div>
 </template>
 
 <style scoped>
+.foot-end {
+  margin-left: auto;
+}
 .app {
   display: flex;
   flex-direction: column;
