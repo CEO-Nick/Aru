@@ -4,7 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { nextTick, onMounted, ref } from "vue";
 import { dayPath } from "./composables/useRollover";
 import { toIsoDate } from "./core/date";
-import { appendTodo } from "./core/todoFile";
+import { prependTodo } from "./core/todoFile";
 import { tauriStore } from "./platform/tauriStore";
 
 type Target = "today" | "someday";
@@ -31,7 +31,7 @@ async function submit() {
   if (!text) return close();
   busy = true;
   const path = target.value === "today" ? dayPath(toIsoDate(new Date())) : "someday.md";
-  await tauriStore.write(path, appendTodo((await tauriStore.read(path)) ?? "", text));
+  await tauriStore.write(path, prependTodo((await tauriStore.read(path)) ?? "", text));
   added.value = true;
   setTimeout(close, 260);
 }

@@ -5,6 +5,7 @@ import { fromTagLabel } from "../core/format";
 import {
   clearFrom,
   insertAfter,
+  insertAfterOpen,
   remove,
   settleChecked,
   toggle,
@@ -197,7 +198,8 @@ async function onAddKeydown(event: KeyboardEvent) {
 function commitDraft(): boolean {
   const text = draft.value.trim();
   if (!text) return false;
-  items.value = insertAfter(items.value, null, newItem(text));
+  const created = newItem(text);
+  items.value = props.sortChecked ? insertAfterOpen(items.value, created) : insertAfter(items.value, null, created);
   draft.value = "";
   return true;
 }

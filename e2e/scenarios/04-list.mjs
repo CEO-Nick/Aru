@@ -248,4 +248,17 @@ export default async function (browser) {
     assert.deepEqual(await texts(page, "today"), ["둘", "하나!?"]);
     await context.close();
   });
+
+  await scenario("끝낸 일이 있을 때 입력칸으로 추가하면 끝낸 일들 위, 남은 일의 맨 끝에 들어간다", async () => {
+    const { page, context } = await openApp(browser, {
+      files: { "daily/2026-10-14.md": "- [ ] 하나\n- [x] 끝낸 일\n" },
+    });
+    const input = page.locator('[data-list="today"] .add input');
+    await input.fill("새 일");
+    await input.press("Enter");
+    await page.clock.runFor(10);
+    assert.deepEqual(await texts(page, "today"), ["하나", "새 일", "끝낸 일"]);
+    assert.equal((await fs(page))["daily/2026-10-14.md"], "- [ ] 하나\n- [ ] 새 일\n- [x] 끝낸 일\n");
+    await context.close();
+  });
 }

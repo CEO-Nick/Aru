@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   clearFrom,
   insertAfter,
+  insertAfterOpen,
   moveBefore,
   settleChecked,
   remove,
@@ -23,6 +24,25 @@ describe("toggle", () => {
 describe("updateText", () => {
   it("해당 항목의 글자만 바꾼다", () => {
     expect(updateText([a, b], "b", "둘 수정")).toEqual([a, { ...b, text: "둘 수정" }]);
+  });
+});
+
+describe("insertAfterOpen", () => {
+  const open1 = { id: "a", text: "하나", done: false };
+  const open2 = { id: "b", text: "둘", done: false };
+  const done1 = { id: "x", text: "끝낸 일", done: true };
+  const created = { id: "n", text: "새 일", done: false };
+
+  it("남은 일의 맨 끝, 끝낸 일들 바로 위에 넣는다", () => {
+    expect(insertAfterOpen([open1, open2, done1], created)).toEqual([open1, open2, created, done1]);
+  });
+
+  it("남은 일이 없으면 맨 위에 넣는다", () => {
+    expect(insertAfterOpen([done1], created)).toEqual([created, done1]);
+  });
+
+  it("끝낸 일이 사이에 섞여 있으면 마지막 남은 일 다음에 넣는다", () => {
+    expect(insertAfterOpen([open1, done1, open2], created)).toEqual([open1, done1, open2, created]);
   });
 });
 

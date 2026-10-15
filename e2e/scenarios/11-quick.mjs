@@ -6,13 +6,13 @@ const TODAY = "daily/2026-10-14.md";
 const calls = (page, name) => page.evaluate((n) => window.__calls.filter(([c]) => c === n).length, name);
 
 export default async function (browser) {
-  await scenario("빠른 입력창: 쓰고 Enter → 오늘 할 일 맨 끝에 추가되고(메모 유지) 잠시 뒤 창이 닫힌다", async () => {
-    const { page, context, errors } = await openApp(browser, { ...QUICK, files: { [TODAY]: "- [x] 하나\n\n메모\n" } });
+  await scenario("빠른 입력창: 쓰고 Enter → 오늘 할 일 맨 위에 추가되고(끝낸 일·메모 유지) 잠시 뒤 창이 닫힌다", async () => {
+    const { page, context, errors } = await openApp(browser, { ...QUICK, files: { [TODAY]: "- [ ] 남은 일\n- [x] 하나\n\n메모\n" } });
     assert.ok(await page.locator(".quick input").evaluate((e) => e === document.activeElement), "입력칸에 커서가 없다");
     await page.keyboard.type("전자고지서 배포");
     await page.keyboard.press("Enter");
     await page.clock.runFor(10);
-    assert.equal((await fs(page))[TODAY], "- [x] 하나\n- [ ] 전자고지서 배포\n\n메모\n");
+    assert.equal((await fs(page))[TODAY], "- [ ] 전자고지서 배포\n- [ ] 남은 일\n- [x] 하나\n\n메모\n");
     assert.equal(await page.locator(".hint").textContent(), "추가됨");
     assert.equal(await calls(page, "hide_quick"), 0);
     await page.clock.runFor(300);

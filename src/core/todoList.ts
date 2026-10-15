@@ -23,6 +23,16 @@ export function insertAfter(
   return [...list.slice(0, index + 1), item, ...list.slice(index + 1)];
 }
 
+/** 남은 일의 맨 끝에 넣는다. 끝낸 일들 밑으로 들어가 안 보이는 일이 없게 한다 */
+export function insertAfterOpen(list: TodoItem[], item: TodoItem): TodoItem[] {
+  // findLastIndex는 macOS 11 기본 Safari(14)에 없다
+  let last = -1;
+  list.forEach((t, i) => {
+    if (!t.done) last = i;
+  });
+  return [...list.slice(0, last + 1), item, ...list.slice(last + 1)];
+}
+
 export function remove(list: TodoItem[], id: string): TodoItem[] {
   return list.filter((item) => item.id !== id);
 }
