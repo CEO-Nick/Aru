@@ -1031,7 +1031,7 @@ dependencies = [
 
 [[package]]
 name = "floating-todo"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "objc2-app-kit",
  "serde",
