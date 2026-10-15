@@ -180,6 +180,8 @@ export default async function (browser) {
     const { page, context } = await openApp(browser, {
       files: { "daily/2026-10-14.md": "- [ ] 하나\n- [ ] 둘\n- [ ] 셋\n- [x] 어제 끝낸 일\n" },
     });
+    // 0.5초 창은 클릭 사이 실제 시간에도 흔들린다. 시계를 멈춰 runFor로만 흐르게 한다
+    await page.clock.pauseAt(new Date("2026-10-14T10:00:05"));
     const box = (text) => page.locator('[data-list="today"] .item', { hasText: text }).locator(".box");
     await box("하나").click();
     await page.clock.runFor(400);

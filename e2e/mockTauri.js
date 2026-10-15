@@ -44,6 +44,9 @@
         case "open_overview":
           if (window.parent !== window) window.parent.postMessage({ type: "open-overview" }, "*");
           return null;
+        case "plugin:window|set_always_on_top":
+          if (window.parent !== window) window.parent.postMessage({ type: "pin", value: args.value }, "*");
+          return null;
         case "hide_quick":
           if (window.parent !== window) window.parent.postMessage({ type: "hide-quick" }, "*");
           return null;
@@ -60,7 +63,7 @@
           if (window.__failInstall) throw "내려받기 실패(모의)";
           return null;
         case "get_data_root":
-          return "/Users/me/Library/Application Support/dev.aruu.floatingtodo";
+          return "/Users/me/Library/Application Support/dev.aruu.aru";
         case "plugin:dialog|open":
           return window.__pickResult ?? null;
         case "plugin:event|emit":

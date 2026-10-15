@@ -396,8 +396,28 @@ fn dev_hooks(app: &App) -> Result<(), String> {
     Ok(())
 }
 
+// 0.2.2까지의 앱 ID. 그때 만든 할 일·설정 폴더를 새 ID 폴더로 옮겨 온다
+const LEGACY_IDENTIFIER: &str = "dev.aruu.floatingtodo";
+
+#[cfg(target_os = "macos")]
+fn move_legacy_data(identifier: &str) {
+    let Ok(home) = std::env::var("HOME") else { return };
+    let library = PathBuf::from(home).join("Library");
+    // 할 일·설정은 Application Support, 브라우저 저장소(마지막 실행 버전)는 WebKit 아래에 있다
+    for dir in ["Application Support", "WebKit"] {
+        let base = library.join(dir);
+        if let Err(e) = storage::move_legacy_dir(&base.join(LEGACY_IDENTIFIER), &base.join(identifier)) {
+            trace(&format!("옛 데이터 폴더 이동 실패({dir}): {e}"));
+        }
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let context = tauri::generate_context!();
+    // 플러그인들이 새 폴더를 만들기 전에 옮겨야 한다
+    #[cfg(target_os = "macos")]
+    move_legacy_data(&context.config().identifier);
     tauri::Builder::default()
         // 이미 켜져 있으면 새로 띄우지 않고 기존 작은 창을 앞으로 가져온다. 다른 플러그인보다 먼저 등록해야 한다
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)))
@@ -449,7 +469,7 @@ pub fn run() {
             check_update_now,
             install_update
         ])
-        .build(tauri::generate_context!())
+        .build(context)
         .expect("error while building tauri application")
         .run(|app, event| {
             // 작은 창을 닫아(숨겨) 둔 상태에서 Dock 아이콘을 누르면 다시 보여 준다

@@ -9,7 +9,7 @@ export default async function (browser) {
     const { page, context, errors } = await openApp(browser, { files: { "daily/2026-10-14.md": "- [ ] 하나\n" } });
     await page.locator('[aria-label="설정"]').click();
     await page.clock.runFor(10);
-    assert.equal(await page.locator(".settings .path").textContent(), "/Users/me/Library/Application Support/dev.aruu.floatingtodo");
+    assert.equal(await page.locator(".settings .path").textContent(), "/Users/me/Library/Application Support/dev.aruu.aru");
     assert.equal(await page.locator('[data-list="today"]').isVisible(), false);
     await page.locator('[data-action="close"]').click();
     assert.deepEqual(await texts(page, "today"), ["하나"]);

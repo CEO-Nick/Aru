@@ -73,12 +73,24 @@ pub fn copy_into_if_empty(from: &Path, to: &Path) -> Result<bool, String> {
     Ok(true)
 }
 
+/// 앱 ID가 바뀌면 데이터 폴더 이름도 바뀐다. 새 폴더가 아직 없을 때만 옛 폴더를 통째로 옮긴다
+pub fn move_legacy_dir(old: &Path, new: &Path) -> Result<bool, String> {
+    if !old.is_dir() || new.exists() {
+        return Ok(false);
+    }
+    if let Some(parent) = new.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::rename(old, new).map_err(|e| e.to_string())?;
+    Ok(true)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn temp_root(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("floating-todo-test-{name}-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("aru-test-{name}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
@@ -159,5 +171,31 @@ mod tests {
         let root = temp_root("escape");
         assert!(write_text(&root, "../escape.md", "x").is_err());
         assert!(read_text(&root, "/etc/hosts").is_err());
+    }
+
+    #[test]
+    fn 옛_폴더만_있으면_새_이름으로_옮긴다() {
+        let base = temp_root("legacy-move");
+        write_text(&base.join("old"), "daily/2026-10-14.md", "- [ ] 하나\n").unwrap();
+        assert!(move_legacy_dir(&base.join("old"), &base.join("new")).unwrap());
+        assert!(!base.join("old").exists());
+        assert_eq!(read_text(&base.join("new"), "daily/2026-10-14.md").unwrap().as_deref(), Some("- [ ] 하나\n"));
+    }
+
+    #[test]
+    fn 새_폴더가_이미_있으면_옛_폴더를_건드리지_않는다() {
+        let base = temp_root("legacy-both");
+        write_text(&base.join("old"), "someday.md", "- [ ] 옛\n").unwrap();
+        write_text(&base.join("new"), "someday.md", "- [ ] 새\n").unwrap();
+        assert!(!move_legacy_dir(&base.join("old"), &base.join("new")).unwrap());
+        assert_eq!(read_text(&base.join("old"), "someday.md").unwrap().as_deref(), Some("- [ ] 옛\n"));
+        assert_eq!(read_text(&base.join("new"), "someday.md").unwrap().as_deref(), Some("- [ ] 새\n"));
+    }
+
+    #[test]
+    fn 옛_폴더가_없으면_아무것도_하지_않는다() {
+        let base = temp_root("legacy-none");
+        assert!(!move_legacy_dir(&base.join("old"), &base.join("new")).unwrap());
+        assert!(!base.join("new").exists());
     }
 }

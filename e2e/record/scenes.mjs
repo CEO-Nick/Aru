@@ -151,29 +151,49 @@ const scenes = {
     return midnightScene(browser, "someday");
   },
 
-  // 핀과 투명도
+  // 다른 앱 창을 눌러도 맨 앞, 고정을 풀면 뒤로, 흐리게 하면 비쳐 보인다
   async window(browser) {
     const s = await openScene(browser, {
-      ...STAGE,
-      files: { [TODAY]: "- [ ] 회의록 정리\n- [ ] PR 리뷰 반영\n", "someday.md": "- [ ] 여권 갱신\n" },
+      url: "http://localhost:1430/e2e/record/pinstage.html",
+      viewport: { width: 940, height: 500 },
+      files: { [TODAY]: "- [ ] 스테이지 배포\n- [ ] PR 리뷰 반영\n- [ ] 회의록 정리\n", "someday.md": "- [ ] 여권 갱신\n" },
     });
     const app = s.page.frameLocator("#app");
+    const barAt = async (id) => {
+      const b = await s.page.locator(`#${id} .bar`).boundingBox();
+      return { x: b.x + (id === "browser" ? 190 : 120), y: b.y + b.height / 2 };
+    };
     await s.start();
+    await s.wait(600);
+    // 고정 켬: 브라우저와 편집기를 번갈아 눌러도 Aru는 그 위에 남는다
+    await s.click(null, { at: await barAt("browser") });
+    await s.wait(900);
+    await s.click(null, { at: await barAt("editor") });
+    await s.wait(700);
+    await s.click(null, { at: await barAt("browser") });
+    await s.wait(900);
+    // 고정 끔: 브라우저를 누르면 Aru가 뒤로 간다
+    await s.click(app.locator('[aria-label="항상 위에 고정"]'));
+    await s.wait(800);
+    await s.click(null, { at: await barAt("browser") });
+    await s.wait(1100);
+    // 다시 Aru를 눌러 앞으로 가져오고 고정을 켠다
+    await s.click(null, { at: { x: 860, y: 300 } });
+    await s.wait(400);
+    await s.click(app.locator('[aria-label="항상 위에 고정"]'));
+    await s.wait(800);
+    // 흐리게: 뒤의 브라우저가 비쳐 보인다
     const slider = await s.center(app.locator('input[type="range"]'));
     const right = slider.box.x + slider.box.width - 4;
     const left = slider.box.x + 4;
     await s.moveTo(right, slider.y);
     await s.page.mouse.down();
     await s.ripple();
-    await s.moveTo(left + 8, slider.y, 1100);
-    await s.wait(500);
-    await s.moveTo(left + slider.box.width * 0.6, slider.y, 900);
+    await s.moveTo(left + 10, slider.y, 1100);
+    await s.wait(700);
+    await s.moveTo(left + slider.box.width * 0.65, slider.y, 900);
     await s.page.mouse.up();
-    await s.wait(500);
-    await s.click(app.locator('[aria-label="항상 위에 고정"]'));
-    await s.wait(700);
-    await s.click(app.locator('[aria-label="항상 위에 고정"]'));
-    await s.wait(700);
+    await s.wait(900);
     return s;
   },
 
@@ -274,8 +294,8 @@ async function midnightScene(browser, carryOver) {
   return s;
 }
 
-const widths = { overview: 960, quick: 900, window: 400 };
-const fpsOf = { window: 10 };
+const widths = { overview: 960, quick: 900, window: 900 };
+const fpsOf = { window: 12 };
 // 투명도 장면은 매 프레임 화면 전체가 바뀌어 용량이 커서 색 수를 줄인다
 const colorsOf = { window: 72 };
 const server = await startServer();

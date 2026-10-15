@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Aru",
-  "version": "0.2.2",
-  "identifier": "dev.aruu.floatingtodo",
+  "version": "0.2.3",
+  "identifier": "dev.aruu.aru",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",

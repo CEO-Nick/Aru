@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Aru 고정 녹화 무대</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(110% 80% at 80% 115%, #ff8a3d4d 0%, transparent 55%),
+      linear-gradient(170deg, #17181b 0%, #1d1f23 55%, #2a211c 100%);
+    font: 13px/1.7 "SF Mono", Menlo, monospace;
+  }
+  .menubar {
+    position: absolute; left: 0; right: 0; top: 0; height: 24px; display: flex; align-items: center; gap: 14px;
+    padding: 0 14px; background: #0c0d0f; color: #e8e8ee; z-index: 5000;
+    font: 600 12px -apple-system, "Apple SD Gothic Neo", sans-serif;
+  }
+  .menubar #active { font-weight: 700 }
+  .menubar .clock { margin-left: auto; font-weight: 500 }
+  /* 다른 앱 창들. 누르면 맨 앞으로 온다 */
+  .appwin {
+    position: absolute; border-radius: 12px; overflow: hidden; border: 1px solid #ffffff1c;
+    box-shadow: 0 24px 60px #00000070; transition: filter .15s;
+  }
+  .appwin .bar { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 12px; font: 600 12px -apple-system, sans-serif; color: #c9ccd4 }
+  .appwin .bar i { width: 12px; height: 12px; border-radius: 50%; background: #4a4b50 }
+  .appwin.front .bar i:nth-child(1) { background: #ff5f57 } .appwin.front .bar i:nth-child(2) { background: #febc2e } .appwin.front .bar i:nth-child(3) { background: #28c840 }
+  .appwin .bar span { margin-left: 8px }
+  #editor { left: 18px; top: 40px; width: 400px; height: 430px; overflow: hidden; background: #1b1c1f; color: #9aa3b8 }
+  #editor pre { margin: 0; padding: 10px 20px; font: inherit }
+  #editor b { color: #e6a26b; font-weight: 400 } #editor em { color: #7fd1b9; font-style: normal } #editor u { color: #ffb86b; text-decoration: none }
+  #browser { left: 330px; top: 74px; width: 430px; height: 380px; background: #f4f2ee; color: #2a2b30 }
+  #browser .bar { background: #e4e1dc; color: #3b3c42 }
+  #browser .page { padding: 18px 22px; font: 14px/1.6 -apple-system, "Apple SD Gothic Neo", sans-serif }
+  #browser h4 { margin: 0 0 10px; font-size: 19px }
+  #browser p { margin: 0 0 10px; color: #55565c }
+  #browser .line { height: 9px; border-radius: 5px; background: #dcd8d1; margin: 10px 0 }
+  .win {
+    position: absolute; right: 22px; top: 40px; width: 300px; height: 440px; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 30px 70px #00000080, 0 0 0 1px #ffffff1f; transition: opacity .12s linear;
+  }
+  .win iframe { width: 100%; height: 100%; border: 0; display: block; background: #262628 }
+  .lights { position: absolute; left: 12px; top: 11px; display: flex; gap: 8px; pointer-events: none }
+  .lights i { width: 12px; height: 12px; border-radius: 50% }
+  .lights i:nth-child(1) { background: #ff5f57 } .lights i:nth-child(2) { background: #febc2e } .lights i:nth-child(3) { background: #28c840 }
+  .caption {
+    position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 6000;
+    display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px;
+    background: #121316e6; border: 1px solid #ffffff22; color: #f2eee8;
+    font: 600 13px -apple-system, "Apple SD Gothic Neo", sans-serif; white-space: nowrap;
+  }
+  .caption i { width: 8px; height: 8px; border-radius: 50%; background: #ff8a3d }
+  .caption.off i { background: #6b6c72 }
+</style>
+</head>
+<body>
+<div class="menubar"><span id="active">Code</span><span class="clock">10월 14일 (수) 오전 10:00</span></div>
+
+<div class="appwin" id="editor">
+  <div class="bar"><i></i><i></i><i></i><span>deploy.ts — Code</span></div>
+<pre><b>export</b> <b>async</b> <b>function</b> <em>deploy</em>(env) {
+  <b>const</b> build = <b>await</b> <em>bundle</em>(<u>"release"</u>)
+  <b>await</b> <em>upload</em>(build, env)
+  <b>return</b> <em>notify</em>(<u>"#deploy"</u>, build.version)
+}
+
+<b>describe</b>(<u>"deploy"</u>, () =&gt; {
+  <em>it</em>(<u>"uploads to stage first"</u>, <b>async</b> () =&gt; {
+    <b>await</b> <em>deploy</em>(<u>"stage"</u>)
+    <em>expect</em>(uploads).<em>toContain</em>(<u>"stage"</u>)
+  })
+})</pre>
+</div>
+
+<div class="appwin" id="browser">
+  <div class="bar"><i></i><i></i><i></i><span>배포 가이드 — Safari</span></div>
+  <div class="page">
+    <h4>스테이지 배포 체크리스트</h4>
+    <p>배포 전에 확인할 항목을 정리했어요.</p>
+    <div class="line" style="width:92%"></div><div class="line" style="width:78%"></div>
+    <div class="line" style="width:85%"></div><div class="line" style="width:60%"></div>
+    <div class="line" style="width:88%"></div><div class="line" style="width:70%"></div>
+  </div>
+</div>
+
+<div class="win" id="aru">
+  <iframe id="app" src="/index.html"></iframe>
+  <div class="lights"><i></i><i></i><i></i></div>
+</div>
+
+<div class="caption" id="caption"><i></i><span id="captionText"></span></div>
+
+<script>
+  const names = { editor: "Code", browser: "Safari", aru: "Aru" };
+  const aru = document.getElementById("aru");
+  let pinned = true;
+  let z = 10;
+
+  // 고정이 켜져 있으면 무엇을 눌러도 Aru가 가장 위다
+  const restack = () => {
+    if (pinned) aru.style.zIndex = 4000;
+  };
+  const caption = () => {
+    document.getElementById("caption").classList.toggle("off", !pinned);
+    document.getElementById("captionText").textContent = pinned
+      ? "고정 켬 · 다른 창을 눌러도 Aru가 맨 앞"
+      : "고정 끔 · 다른 창을 누르면 뒤로 가요";
+  };
+  const bringFront = (id) => {
+    document.querySelectorAll(".appwin").forEach((w) => w.classList.toggle("front", w.id === id));
+    document.getElementById("active").textContent = names[id];
+    const el = document.getElementById(id);
+    el.style.zIndex = ++z;
+    restack();
+  };
+
+  document.querySelectorAll(".appwin").forEach((w) => w.addEventListener("mousedown", () => bringFront(w.id)));
+  // iframe 안을 누르면 무대 쪽 포커스가 빠진다. 그때 Aru를 맨 앞으로
+  addEventListener("blur", () => setTimeout(() => {
+    if (document.activeElement === document.getElementById("app")) bringFront("aru");
+  }));
+
+  addEventListener("message", (e) => {
+    if (e.data?.type === "opacity") aru.style.opacity = e.data.alpha;
+    if (e.data?.type === "pin") {
+      pinned = e.data.value;
+      // 고정을 풀면 지금 자리에서 보통 창처럼 쌓인다
+      if (!pinned) aru.style.zIndex = ++z;
+      restack();
+      caption();
+    }
+  });
+
+  bringFront("editor");
+  caption();
+</script>
+</body>
+</html>
