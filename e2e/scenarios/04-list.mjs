@@ -229,7 +229,7 @@ export default async function (browser) {
     await page.clock.runFor(2000);
     assert.deepEqual(await texts(page, "today"), ["하나", "둘"]);
     await page.locator('[aria-label="설정"]').click();
-    await page.locator('[role="switch"]').click();
+    await page.locator('[role="switch"][data-setting="sortChecked"]').click();
     await page.clock.runFor(10);
     assert.equal(JSON.parse((await fs(page))["settings.json"]).sortChecked, true);
     await context.close();

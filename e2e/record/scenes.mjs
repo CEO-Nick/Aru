@@ -213,6 +213,32 @@ const scenes = {
     return s;
   },
 
+  // Claude Code에 "할 일에 넣어줘" → Aru에 AI 태그로 들어오고, 태그를 눌러 확인한다
+  async ai(browser) {
+    const s = await openScene(browser, {
+      url: "http://localhost:1430/e2e/record/aistage.html",
+      viewport: { width: 940, height: 500 },
+      files: { [TODAY]: "- [x] 스크럼\n- [ ] PR 리뷰 반영\n", "someday.md": "- [ ] 여권 갱신\n" },
+    });
+    const app = s.page.frameLocator("#app");
+    await s.start();
+    await s.wait(600);
+    await s.page.evaluate(() =>
+      window.playAi({
+        prompt: "회의에서 나온 거 오늘 할 일에 넣어줘. 회의록 정리, 스테이지 배포",
+        items: ["회의록 정리", "스테이지 배포"],
+        path: "daily/2026-10-14.md",
+      }),
+    );
+    await s.wait(1600);
+    const tag = app.locator('[data-list="today"] .item', { hasText: "회의록 정리" }).locator(".ai");
+    await s.moveTo(...Object.values(await s.center(tag)).slice(0, 2), 700);
+    await s.wait(900);
+    await s.click(tag, { ms: 200 });
+    await s.wait(1200);
+    return s;
+  },
+
   // 어떤 앱에서든 ⌥Space로 바로 추가
   async quick(browser) {
     const s = await openScene(browser, {
@@ -294,7 +320,7 @@ async function midnightScene(browser, carryOver) {
   return s;
 }
 
-const widths = { overview: 960, quick: 900, window: 900 };
+const widths = { overview: 960, quick: 900, window: 900, ai: 900 };
 const fpsOf = { window: 12 };
 // 색 수를 줄이면 파란 핀·창 버튼 색이 회색으로 뭉개진다. 용량보다 실제 모습이 우선이다
 const colorsOf = {};

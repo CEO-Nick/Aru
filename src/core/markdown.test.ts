@@ -163,3 +163,35 @@ describe("버그 수정: 형식", () => {
     ).toBe("- [ ] 하나\n");
   });
 });
+
+describe("AI가 넣은 할 일 표시", () => {
+  it("ai 주석을 누가·언제 넣었는지로 읽고 글자에서는 뺀다", () => {
+    expect(parseTodos("- [ ] PR 리뷰 <!-- ai:claude-code@1792040000 -->\n")).toEqual([
+      { text: "PR 리뷰", done: false, ai: { by: "claude-code", at: 1792040000 } },
+    ]);
+  });
+
+  it("넘어온 날짜와 AI 표시가 함께 있으면 둘 다 읽고, 다시 쓰면 원본과 같다", () => {
+    const md = "- [ ] PR 리뷰 <!-- from:2026-10-14 ai:codex@1792040000 -->\n";
+    expect(parseTodos(md)).toEqual([
+      { text: "PR 리뷰", done: false, from: "2026-10-14", ai: { by: "codex", at: 1792040000 } },
+    ]);
+    expect(serializeDocument(parseDocument(md))).toBe(md);
+  });
+
+  it("AI 표시가 없어지면 주석도 없어진다", () => {
+    expect(serializeTodos([{ text: "PR 리뷰", done: false }])).toBe("- [ ] PR 리뷰\n");
+  });
+
+  it("글자가 AI 주석처럼 끝나도 다시 읽으면 글자가 그대로다", () => {
+    const todo = { text: "주석 예시 <!-- ai:x@1 -->", done: false };
+    expect(parseTodos(serializeTodos([todo]))).toEqual([todo]);
+  });
+
+  it("예전 형식(넘어온 날짜만, 빈 주석)도 그대로 읽는다", () => {
+    expect(parseTodos("- [ ] 하나 <!-- from:2026-10-13 -->\n- [ ] 둘 <!-- from: -->\n")).toEqual([
+      { text: "하나", done: false, from: "2026-10-13" },
+      { text: "둘", done: false },
+    ]);
+  });
+});

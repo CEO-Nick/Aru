@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, type Directive } from "vue";
 import type { DropMarker } from "../composables/useListDrag";
-import { fromTagLabel } from "../core/format";
+import { aiTagTitle, fromTagLabel } from "../core/format";
 import {
   clearFrom,
+  acceptAi,
   insertAfter,
   insertAfterOpen,
   remove,
@@ -340,6 +341,9 @@ const vEditableText: Directive<HTMLElement, string> = {
         @click="items = clearFrom(items, item.id)"
         >{{ fromTagLabel(item.from) }}</span
       >
+      <span v-if="item.ai" class="ai" :title="aiTagTitle(item.ai)" @click="items = acceptAi(items, item.id)"
+        >AI</span
+      >
     </div>
     <div ref="addRow" class="add" :class="{ 'drop-before': isDropBefore(null) }">
       <span class="box ghost"></span>
@@ -450,6 +454,23 @@ const vEditableText: Directive<HTMLElement, string> = {
 }
 .from:hover::after {
   content: " ✕";
+}
+.ai {
+  flex: none;
+  align-self: center;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--accent);
+  background: rgba(10, 132, 255, 0.16);
+  border-radius: 4px;
+  padding: 0 6px;
+  cursor: pointer;
+}
+.ai:hover {
+  background: rgba(10, 132, 255, 0.3);
+}
+.ai:hover::after {
+  content: " ✓";
 }
 .add input {
   flex: 1;

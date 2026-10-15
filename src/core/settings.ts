@@ -8,6 +8,8 @@ export interface Settings {
   alwaysOnTop: boolean;
   /** 체크하면 끝낸 일들 위로 옮긴다 */
   sortChecked: boolean;
+  /** AI 도구·aru 명령이 할 일을 넣도록 허용한다 */
+  allowExternalAdd: boolean;
   carryOver: CarryOver;
   /** 자정 전환을 마지막으로 처리한 날짜. 며칠 꺼져 있던 경우를 따라잡는 데 쓴다 */
   lastRolloverDate: string | null;
@@ -18,6 +20,7 @@ export const DEFAULT_SETTINGS: Settings = {
   splitRatio: 0.6,
   alwaysOnTop: true,
   sortChecked: true,
+  allowExternalAdd: true,
   carryOver: "keep",
   lastRolloverDate: null,
 };
@@ -44,6 +47,7 @@ export function parseSettings(json: string | null): Settings {
     splitRatio: isNumber(r.splitRatio) ? clamp(r.splitRatio, 0.2, 0.8) : d.splitRatio,
     alwaysOnTop: typeof r.alwaysOnTop === "boolean" ? r.alwaysOnTop : d.alwaysOnTop,
     sortChecked: typeof r.sortChecked === "boolean" ? r.sortChecked : d.sortChecked,
+    allowExternalAdd: typeof r.allowExternalAdd === "boolean" ? r.allowExternalAdd : d.allowExternalAdd,
     carryOver: CARRY_OVERS.includes(r.carryOver as CarryOver) ? (r.carryOver as CarryOver) : d.carryOver,
     lastRolloverDate:
       typeof r.lastRolloverDate === "string" && ISO_DATE.test(r.lastRolloverDate) ? r.lastRolloverDate : null,

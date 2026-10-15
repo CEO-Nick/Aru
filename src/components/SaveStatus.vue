@@ -60,6 +60,7 @@ watch(
   font-size: 11px;
   color: #77777d;
   transition: color 0.4s ease;
+  white-space: nowrap;
 }
 .dot {
   width: 6px;

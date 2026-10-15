@@ -4,7 +4,7 @@ import SettingsPanel from "./SettingsPanel.vue";
 
 const mountPanel = () =>
   mount(SettingsPanel, {
-    props: { carryOver: "keep", sortChecked: true, dataRoot: "/Users/me/Library/Application Support/x" },
+    props: { carryOver: "keep", sortChecked: true, allowExternalAdd: true, dataRoot: "/Users/me/Library/Application Support/x" },
   });
 
 describe("SettingsPanel", () => {
@@ -42,7 +42,7 @@ describe("SettingsPanel", () => {
 
   it("'끝낸 일 아래로 보내기' 스위치가 지금 값을 보여 주고, 누르면 바꾼다", async () => {
     const wrapper = mountPanel();
-    const sw = wrapper.find('[role="switch"]');
+    const sw = wrapper.find('[role="switch"][data-setting="sortChecked"]');
     expect(sw.attributes("aria-checked")).toBe("true");
     await sw.trigger("click");
     expect(wrapper.emitted("update:sortChecked")).toEqual([[false]]);

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<title>Aru AI 녹화 무대</title>
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body {
+    background:
+      radial-gradient(110% 80% at 80% 115%, #ff8a3d4d 0%, transparent 55%),
+      linear-gradient(170deg, #17181b 0%, #1d1f23 55%, #2a211c 100%);
+  }
+  .menubar {
+    position: absolute; left: 0; right: 0; top: 0; height: 24px; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 14px; background: #0c0d0f99; color: #e8e8ee;
+    font: 600 12px -apple-system, "Apple SD Gothic Neo", sans-serif;
+  }
+  .term {
+    position: absolute; left: 18px; top: 40px; width: 560px; bottom: 22px; border-radius: 12px; overflow: hidden;
+    background: #141517; border: 1px solid #ffffff14; color: #d6d8de;
+    font: 13px/1.75 "SF Mono", Menlo, monospace;
+  }
+  .term .bar { height: 30px; display: flex; align-items: center; gap: 8px; padding: 0 12px; color: #8a8d96; font: 600 12px -apple-system, sans-serif }
+  .term .bar i { width: 12px; height: 12px; border-radius: 50%; background: #4a4b50 }
+  .term .bar span { margin-left: 8px }
+  .term pre { margin: 0; padding: 6px 18px; white-space: pre-wrap; font: inherit }
+  .prompt { color: #f2eee8 }
+  .prompt b { color: #ff9a4d; font-weight: 400 }
+  .tool { color: #7fd1b9 }
+  .dim { color: #8a8d96 }
+  .caret { display: inline-block; width: 8px; height: 15px; background: #d6d8de; vertical-align: -2px; animation: blink 1s steps(1) infinite }
+  @keyframes blink { 50% { opacity: 0 } }
+  .win {
+    position: absolute; right: 22px; top: 40px; width: 300px; height: 440px; border-radius: 12px; overflow: hidden;
+    box-shadow: 0 30px 70px #00000080, 0 0 0 1px #ffffff1f;
+  }
+  .win iframe { width: 100%; height: 100%; border: 0; display: block; background: #262628 }
+  .lights { position: absolute; left: 12px; top: 11px; display: flex; gap: 8px; pointer-events: none }
+  .lights i { width: 12px; height: 12px; border-radius: 50% }
+  .lights i:nth-child(1) { background: #ff5f57 } .lights i:nth-child(2) { background: #febc2e } .lights i:nth-child(3) { background: #28c840 }
+</style>
+</head>
+<body>
+<div class="menubar"><span>Terminal</span><span>10월 14일 (수) 오전 10:00</span></div>
+<div class="term">
+  <div class="bar"><i></i><i></i><i></i><span>claude — ~/project</span></div>
+  <pre id="out"></pre>
+</div>
+<div class="win"><iframe id="app" src="/index.html"></iframe><div class="lights"><i></i><i></i><i></i></div></div>
+<script>
+  const out = document.getElementById("out");
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const line = (html) => { out.insertAdjacentHTML("beforeend", html + "\n"); };
+
+  // 녹화 스크립트가 부른다: 사용자가 Claude Code에 부탁하고, Aru 도구가 불려 할 일이 들어간다
+  window.playAi = async ({ prompt, items, path }) => {
+    out.innerHTML = '<span class="prompt"><b>&gt;</b> </span><span id="typed"></span><span class="caret"></span>';
+    const typed = document.getElementById("typed");
+    for (const ch of prompt) {
+      typed.textContent += ch;
+      await sleep(55);
+    }
+    await sleep(500);
+    out.querySelector(".caret").remove();
+    out.insertAdjacentHTML("beforeend", "\n\n");
+    line('<span class="tool">⏺ aru - add_todos</span> <span class="dim">(MCP)</span>');
+    await sleep(700);
+    const app = document.getElementById("app").contentWindow;
+    const now = Math.floor(Date.now() / 1000);
+    const current = app.__mockFs[path] ?? "";
+    const added = items.map((t) => `- [ ] ${t} <!-- ai:claude-code@${now} -->\n`).join("");
+    app.__setFile(path, added + current);
+    app.dispatchEvent(new Event("focus"));
+    line(`<span class="dim">  ⎿  오늘에 ${items.length}개 추가했다.</span>`);
+    await sleep(600);
+    line("");
+    line(`오늘 할 일에 ${items.map((t) => `'${t}'`).join(", ")}을 넣었어요.`);
+  };
+</script>
+</body>
+</html>

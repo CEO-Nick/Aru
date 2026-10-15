@@ -4,12 +4,30 @@ export interface TodoItem extends TodoLine {
   id: string;
 }
 
+// AI가 넣은 할 일은 사용자가 손대는 순간 사용자 것이 된다
+function withoutAi({ ai: _ai, ...item }: TodoItem): TodoItem {
+  return item;
+}
+
 export function toggle(list: TodoItem[], id: string): TodoItem[] {
-  return list.map((item) => (item.id === id ? { ...item, done: !item.done } : item));
+  return list.map((item) => (item.id === id ? withoutAi({ ...item, done: !item.done }) : item));
 }
 
 export function updateText(list: TodoItem[], id: string, text: string): TodoItem[] {
-  return list.map((item) => (item.id === id ? { ...item, text } : item));
+  return list.map((item) => {
+    if (item.id !== id) return item;
+    return item.text === text ? item : withoutAi({ ...item, text });
+  });
+}
+
+/** AI 태그를 눌러 "확인했다"고 표시한다 */
+export function acceptAi(list: TodoItem[], id: string): TodoItem[] {
+  return list.map((item) => (item.id === id ? withoutAi(item) : item));
+}
+
+/** 한 번에 넣은 AI 할 일 묶음 중 아직 손대지 않은 것을 지운다 */
+export function removeAiBatch(list: TodoItem[], batch: { by: string; at: number }): TodoItem[] {
+  return list.filter((item) => item.ai?.by !== batch.by || item.ai?.at !== batch.at);
 }
 
 /** afterId가 null이면 맨 끝에 붙인다 */

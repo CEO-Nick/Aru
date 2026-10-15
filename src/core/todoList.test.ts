@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   clearFrom,
+  acceptAi,
   insertAfter,
   insertAfterOpen,
+  removeAiBatch,
   moveBefore,
   settleChecked,
   remove,
@@ -114,5 +116,30 @@ describe("settleChecked", () => {
     const list = [t("x", true), t("b", true)];
     expect(ids(settleChecked(list, "b"))).toEqual(["b", "x"]);
     expect(settleChecked(list, "zz")).toEqual(list);
+  });
+});
+
+describe("AI가 넣은 할 일", () => {
+  const ai = { by: "claude-code", at: 100 };
+  const fromAi = { id: "a", text: "PR 리뷰", done: false, ai };
+  const mine = { id: "b", text: "장보기", done: false };
+
+  it("체크하면 AI 표시가 사라진다", () => {
+    expect(toggle([fromAi], "a")).toEqual([{ id: "a", text: "PR 리뷰", done: true }]);
+  });
+
+  it("글자를 고치면 AI 표시가 사라지고, 글자가 그대로면 남는다", () => {
+    expect(updateText([fromAi], "a", "PR 리뷰 반영")).toEqual([{ id: "a", text: "PR 리뷰 반영", done: false }]);
+    expect(updateText([fromAi], "a", "PR 리뷰")).toEqual([fromAi]);
+  });
+
+  it("태그를 누르면(acceptAi) 그 할 일만 일반 할 일이 된다", () => {
+    expect(acceptAi([fromAi, mine], "a")).toEqual([{ id: "a", text: "PR 리뷰", done: false }, mine]);
+  });
+
+  it("묶음 되돌리기는 같은 도구·같은 시각에 넣고 아직 손대지 않은 것만 지운다", () => {
+    const other = { id: "c", text: "다른 묶음", done: false, ai: { by: "claude-code", at: 200 } };
+    const sibling = { id: "d", text: "같은 묶음", done: false, ai };
+    expect(removeAiBatch([fromAi, mine, other, sibling], ai)).toEqual([mine, other]);
   });
 });

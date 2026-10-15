@@ -1,3 +1,4 @@
+pub mod cli;
 mod storage;
 
 use std::collections::HashSet;

@@ -10,6 +10,7 @@ import TodoList from "./components/TodoList.vue";
 import UpdateButton from "./components/UpdateButton.vue";
 import UpdatedNotice from "./components/UpdatedNotice.vue";
 import { watchDayChange } from "./composables/useDayWatcher";
+import { useAiNotice } from "./composables/useAiNotice";
 import { useListDrag } from "./composables/useListDrag";
 import { dayPath, rollover } from "./composables/useRollover";
 import { useSettings } from "./composables/useSettings";
@@ -20,6 +21,7 @@ import { toIsoDate } from "./core/date";
 import { splitRatio } from "./core/layout";
 import { sliderToAlpha } from "./core/opacity";
 import { getDataRoot, onDataRootChanged, pickDataRoot, revealDataRoot } from "./platform/dataRoot";
+import { toolLabel } from "./core/format";
 import { onFileChanged, onShowDate, openOverview } from "./platform/events";
 import { onQuitRequested } from "./platform/lifecycle";
 import { tauriStore } from "./platform/tauriStore";
@@ -89,6 +91,7 @@ function openCalendar() {
 }
 
 const drag = useListDrag({ today: todayItems, someday: somedayItems });
+const aiNotice = useAiNotice([todayItems, somedayItems]);
 
 const body = ref<HTMLElement>();
 
@@ -170,6 +173,7 @@ onMounted(async () => {
       <SettingsPanel
         v-model:carry-over="settings.carryOver"
         v-model:sort-checked="settings.sortChecked"
+        v-model:allow-external-add="settings.allowExternalAdd"
         :data-root="dataRoot"
         @change-folder="changeFolder"
         @reveal-folder="revealDataRoot"
@@ -207,7 +211,15 @@ onMounted(async () => {
       </section>
     </main>
     <SaveStatusBar :status="saveStatus" :saved-at="savedAt">
-      <span class="foot-end"><UpdatedNotice /><UpdateButton /></span>
+      <span class="foot-end">
+        <span v-if="aiNotice.notice.value" class="ai-added">
+          <span class="msg"
+            >{{ toolLabel(aiNotice.notice.value.by) }}가 {{ aiNotice.notice.value.count }}개 추가</span
+          >
+          <button data-action="undo-ai" @click="aiNotice.undo()">되돌리기</button>
+        </span>
+        <UpdatedNotice /><UpdateButton />
+      </span>
     </SaveStatusBar>
   </div>
 </template>
@@ -215,6 +227,32 @@ onMounted(async () => {
 <style scoped>
 .foot-end {
   margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.ai-added {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: var(--ink);
+}
+.ai-added .msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ai-added button {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
 }
 .app {
   display: flex;

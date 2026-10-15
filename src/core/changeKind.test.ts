@@ -24,3 +24,10 @@ describe("saveModeFor", () => {
     expect(saveModeFor([{ ...a, from: "2026-10-12" }], [a])).toBe("now");
   });
 });
+
+describe("AI 태그", () => {
+  it("AI 태그가 떨어지면(사용자가 확인함) 바로 저장한다", () => {
+    const before = [{ id: "a", text: "PR 리뷰", done: false, ai: { by: "codex", at: 1 } }];
+    expect(saveModeFor(before, [{ id: "a", text: "PR 리뷰", done: false }])).toBe("now");
+  });
+});

@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { CarryOver } from "../core/settings";
 
-defineProps<{ carryOver: CarryOver; sortChecked: boolean; dataRoot: string }>();
+defineProps<{ carryOver: CarryOver; sortChecked: boolean; allowExternalAdd: boolean; dataRoot: string }>();
 const emit = defineEmits<{
   "update:carryOver": [value: CarryOver];
   "update:sortChecked": [value: boolean];
+  "update:allowExternalAdd": [value: boolean];
   "change-folder": [];
   "reveal-folder": [];
   close: [];
@@ -49,6 +50,7 @@ const OPTIONS: { value: CarryOver; title: string; hint: string }[] = [
     <div
       class="switch-row"
       role="switch"
+      data-setting="sortChecked"
       tabindex="0"
       :aria-checked="sortChecked"
       @click="emit('update:sortChecked', !sortChecked)"
@@ -59,6 +61,25 @@ const OPTIONS: { value: CarryOver; title: string; hint: string }[] = [
         <small>체크하고 0.5초 뒤 끝낸 일들 맨 위로 옮긴다. 그 사이 다시 누르면 취소된다.</small>
       </span>
       <span class="switch" :class="{ on: sortChecked }"><i></i></span>
+    </div>
+
+    <hr />
+
+    <h4>AI · 명령어</h4>
+    <div
+      class="switch-row"
+      role="switch"
+      data-setting="allowExternalAdd"
+      tabindex="0"
+      :aria-checked="allowExternalAdd"
+      @click="emit('update:allowExternalAdd', !allowExternalAdd)"
+      @keydown.space.prevent="emit('update:allowExternalAdd', !allowExternalAdd)"
+    >
+      <span>
+        <b>AI·명령어로 추가 허용</b>
+        <small>Claude Code 같은 AI 도구나 aru 명령이 할 일을 넣을 수 있다. 넣은 할 일엔 AI 태그가 붙는다.</small>
+      </span>
+      <span class="switch" :class="{ on: allowExternalAdd }"><i></i></span>
     </div>
 
     <hr />
