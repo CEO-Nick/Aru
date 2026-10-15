@@ -1,0 +1,52 @@
+name: Release
+
+# v0.2.0 같은 태그를 올리면 맥 앱을 빌드·서명해 GitHub Releases에 올린다.
+# 설치된 앱은 latest.json을 보고 새 버전을 찾는다.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - run: npm test
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Aru ${{ github.ref_name }}
+          releaseBody: 앱을 켜 두면 창 아래에 업데이트 버튼이 뜹니다. 처음 설치는 Aru-mac.zip을 받으세요.
+          releaseDraft: false
+          prerelease: false
+
+      # 소개 페이지의 다운로드 버튼은 버전과 상관없이 늘 같은 이름의 최신 파일을 가리킨다
+      - name: Upload Aru-mac.zip
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd src-tauri/target/release/bundle/macos
+          ditto -c -k --sequesterRsrc --keepParent Aru.app Aru-mac.zip
+          gh release upload "${{ github.ref_name }}" Aru-mac.zip --clobber

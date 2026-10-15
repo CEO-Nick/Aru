@@ -6,6 +6,7 @@ import SaveStatusBar from "./components/SaveStatus.vue";
 import SettingsPanel from "./components/SettingsPanel.vue";
 import TitleBar from "./components/TitleBar.vue";
 import TodoList from "./components/TodoList.vue";
+import UpdateButton from "./components/UpdateButton.vue";
 import { watchDayChange } from "./composables/useDayWatcher";
 import { useListDrag } from "./composables/useListDrag";
 import { dayPath, rollover } from "./composables/useRollover";
@@ -202,7 +203,9 @@ onMounted(async () => {
         />
       </section>
     </main>
-    <SaveStatusBar :status="saveStatus" :saved-at="savedAt" />
+    <SaveStatusBar :status="saveStatus" :saved-at="savedAt">
+      <UpdateButton />
+    </SaveStatusBar>
   </div>
 </template>
 

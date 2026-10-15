@@ -9,9 +9,9 @@
 맥 화면 맨 위에 떠 있는 작은 할 일 창.<br>
 오늘 할 일과 언젠가 할 일을 한 창에 두고, 무슨 일을 하든 시야에서 놓치지 않게.
 
-[**macOS용 다운로드**](https://aruu.dev/aru/download/Aru-mac.zip) · [소개 페이지](https://aruu.dev/aru/)
+[**macOS용 다운로드**](https://github.com/CEO-Nick/Aru/releases/latest/download/Aru-mac.zip) · [소개 페이지](https://aruu.dev/aru/)
 
-<sub>무료 · Apple Silicon 맥 · 서버도 계정도 없음</sub>
+<sub>무료 · Apple Silicon 맥 · 자동 업데이트 · 서버도 계정도 없음</sub>
 
 <br>
 
@@ -81,7 +81,7 @@
 
 ## 설치
 
-1. [Aru-mac.zip](https://aruu.dev/aru/download/Aru-mac.zip)을 내려받아 압축을 푼다.
+1. [Aru-mac.zip](https://github.com/CEO-Nick/Aru/releases/latest/download/Aru-mac.zip)을 내려받아 압축을 푼다.
 2. `Aru.app`을 응용 프로그램 폴더로 옮긴다.
 3. 처음 한 번만 **우클릭 → 열기**. Apple 인증서가 없는 개인 앱이라 처음 열 때만 확인 창이 뜬다.
 

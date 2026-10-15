@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Aru",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "identifier": "dev.aruu.floatingtodo",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -38,6 +38,19 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
-    ]
+    ],
+    "createUpdaterArtifacts": true,
+    "macOS": {
+      "signingIdentity": "-",
+      "minimumSystemVersion": "11.0"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZBQ0I0NjdCQTQ2QTg2NzQKUldSMGhtcWtlMGJMYXNVMUp5QmF4Vmo4OGRqYXRJNnE2NXFHWkJOT0x3NjFUU1NFNzU0ZHVTYXMK",
+      "endpoints": [
+        "https://github.com/CEO-Nick/Aru/releases/latest/download/latest.json"
+      ]
+    }
   }
 }

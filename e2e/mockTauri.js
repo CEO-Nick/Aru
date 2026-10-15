@@ -47,6 +47,12 @@
         case "hide_quick":
           if (window.parent !== window) window.parent.postMessage({ type: "hide-quick" }, "*");
           return null;
+        case "pending_update":
+          return window.__pendingUpdate ?? null;
+        case "install_update":
+          await new Promise((r) => setTimeout(r, window.__installDelay ?? 0));
+          if (window.__failInstall) throw "내려받기 실패(모의)";
+          return null;
         case "get_data_root":
           return "/Users/me/Library/Application Support/dev.aruu.floatingtodo";
         case "plugin:dialog|open":

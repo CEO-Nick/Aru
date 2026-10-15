@@ -2,11 +2,13 @@ mod storage;
 
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
 use tauri::menu::{Menu, MenuBuilder, MenuItem, MenuItemBuilder, SubmenuBuilder};
 use tauri::tray::TrayIconBuilder;
+use tauri_plugin_updater::UpdaterExt;
 use tauri::{
     App, AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
     Window,
@@ -87,7 +89,13 @@ fn hide_quick(app: AppHandle) {
 
 /// 종료 요청 뒤 아직 저장을 마치지 않은 창들
 #[derive(Default)]
-struct QuitState(Mutex<Option<HashSet<String>>>);
+struct QuitState(Mutex<Option<HashSet<String>>>, AtomicBool);
+
+/// 찾아 둔 새 버전. 창이 이벤트를 듣기 전에 찾았을 수 있어서 남겨 두고 물으면 알려 준다
+#[derive(Default)]
+struct UpdateState(Mutex<Option<String>>);
+
+const UPDATE_CHECK_INTERVAL: Duration = Duration::from_secs(6 * 60 * 60);
 
 #[tauri::command]
 fn set_window_opacity(window: WebviewWindow, alpha: f64) -> Result<(), String> {
@@ -203,9 +211,16 @@ fn quit_ready(app: AppHandle, window: Window, state: tauri::State<QuitState>) {
     if let Some(labels) = pending.as_mut() {
         labels.remove(window.label());
         if labels.is_empty() {
-            app.exit(0);
+            finish_quit(&app);
         }
     }
+}
+
+fn finish_quit(app: &AppHandle) {
+    if app.state::<QuitState>().1.load(Ordering::SeqCst) {
+        app.restart();
+    }
+    app.exit(0);
 }
 
 // 열린 창마다 저장 대기분을 마저 쓰고 quit_ready를 부른다. 모두 응답하면 끄고, 응답이 없어도 2초 뒤엔 끈다
@@ -213,7 +228,7 @@ fn request_quit(app: &AppHandle) {
     // 빠른 입력창은 저장할 게 없어서 기다리지 않는다
     let labels: HashSet<String> = app.webview_windows().into_keys().filter(|l| l != "quick").collect();
     if labels.is_empty() {
-        app.exit(0);
+        finish_quit(app);
         return;
     }
     *app.state::<QuitState>().0.lock().unwrap() = Some(labels);
@@ -221,8 +236,57 @@ fn request_quit(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(Duration::from_secs(2));
-        app.exit(0);
+        finish_quit(&app);
     });
+}
+
+async fn check_update(app: &AppHandle) {
+    let update = match app.updater() {
+        Ok(updater) => updater.check().await,
+        Err(e) => Err(e),
+    };
+    match update {
+        Ok(Some(update)) => {
+            *app.state::<UpdateState>().0.lock().unwrap() = Some(update.version.clone());
+            let _ = app.emit("update-available", update.version);
+        }
+        Ok(None) => {}
+        // 오프라인이거나 GitHub이 응답하지 않으면 다음 확인 때 다시 본다
+        Err(e) => trace(&format!("업데이트 확인 실패: {e}")),
+    }
+}
+
+fn watch_updates(app: &AppHandle) {
+    // 개발 빌드는 .app 묶음이 아니라 설치할 수 없다
+    if cfg!(debug_assertions) {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || loop {
+        tauri::async_runtime::block_on(check_update(&app));
+        std::thread::sleep(UPDATE_CHECK_INTERVAL);
+    });
+}
+
+#[tauri::command]
+fn pending_update(state: tauri::State<UpdateState>) -> Option<String> {
+    state.0.lock().unwrap().clone()
+}
+
+#[tauri::command]
+async fn install_update(app: AppHandle) -> Result<(), String> {
+    let update = app
+        .updater()
+        .map_err(|e| e.to_string())?
+        .check()
+        .await
+        .map_err(|e| e.to_string())?
+        .ok_or("새 버전이 없다")?;
+    update.download_and_install(|_, _| {}, || {}).await.map_err(|e| e.to_string())?;
+    // 새 버전은 이미 제자리에 있다. 저장 대기분을 마저 쓰고 새 버전으로 다시 켠다
+    app.state::<QuitState>().1.store(true, Ordering::SeqCst);
+    request_quit(&app);
+    Ok(())
 }
 
 fn show_main_window(app: &AppHandle) {
@@ -335,6 +399,8 @@ pub fn run() {
         .plugin(tauri_plugin_window_state::Builder::default().with_denylist(&["quick"]).build())
         .manage(QuitState::default())
         .manage(QuickState::default())
+        .manage(UpdateState::default())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
@@ -346,6 +412,7 @@ pub fn run() {
         )
         .setup(|app| {
             build_tray(app)?;
+            watch_updates(app.handle());
             // 다른 앱이 이미 쓰고 있어 등록에 실패해도 앱은 그대로 쓴다
             if let Err(e) = app.global_shortcut().register(quick_shortcut()) {
                 trace(&format!("단축키 등록 실패: {e}"));
@@ -369,7 +436,9 @@ pub fn run() {
             hide_quick,
             open_overview,
             get_data_root,
-            set_data_root
+            set_data_root,
+            pending_update,
+            install_update
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")

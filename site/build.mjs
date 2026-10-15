@@ -45,7 +45,7 @@ const page = `${root}/site/index.html`;
 writeFileSync(
   page,
   readFileSync(page, "utf8").replace(
-    /((?:media\/[a-z-]+\.gif)|(?:download\/Aru-mac\.zip)|(?:demo\/index\.html))(\?v=\w+)?/g,
+    /((?:media\/[a-z-]+\.gif)|(?:demo\/index\.html))(\?v=\w+)?/g,
     `$1?v=${version}`,
   ),
 );
