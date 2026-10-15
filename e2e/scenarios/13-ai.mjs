@@ -95,4 +95,58 @@ export default async function (browser) {
     assert.equal(await page.locator(".foot .ai-added .msg").textContent(), "Claude Code가 1개 추가");
     await context.close();
   });
+
+  await scenario("묶음의 AI 태그를 모두 확인하면 되돌리기 알림도 사라진다", async () => {
+    const { page, context } = await openApp(browser, {
+      files: { [TODAY]: `- [ ] 가 <!-- ai:codex@${NOW - 5} -->\n- [ ] 나 <!-- ai:codex@${NOW - 5} -->\n` },
+    });
+    const notice = page.locator(".foot .ai-added");
+    assert.equal(await notice.count(), 1);
+    await tag(page, "가").click();
+    await page.clock.runFor(10);
+    assert.equal(await notice.count(), 1, "아직 하나 남았는데 사라졌다");
+    await tag(page, "나").click();
+    await page.clock.runFor(10);
+    assert.equal(await notice.count(), 0);
+    await context.close();
+  });
+
+  await scenario("내일이나 지난 날에 넣어도 날짜를 붙여 알리고, 되돌리기는 그 날짜 파일에서 지운다", async () => {
+    const TOMORROW = "daily/2026-10-15.md";
+    const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 장보기\n" } });
+    await page.evaluate(
+      ([p, c, b]) => {
+        window.__setFile(p, c);
+        window.__aiBatches = [b];
+      },
+      [
+        TOMORROW,
+        `- [ ] 기획서 <!-- ai:claude-code@${NOW + 5} -->\n- [ ] 리뷰 <!-- ai:claude-code@${NOW + 5} -->\n- [ ] 원래 일\n`,
+        { by: "claude-code", at: NOW + 5, path: TOMORROW, count: 2 },
+      ],
+    );
+    await page.clock.runFor(3500);
+    const notice = page.locator(".foot .ai-added");
+    assert.equal(await notice.locator(".msg").textContent(), "Claude Code가 10/15에 2개 추가");
+    await notice.locator('[data-action="undo-ai"]').click();
+    await page.clock.runFor(10);
+    assert.equal((await fs(page))[TOMORROW], "- [ ] 원래 일\n");
+    assert.equal((await fs(page))[TODAY], "- [ ] 장보기\n");
+    assert.equal(await notice.count(), 0);
+    await context.close();
+  });
+
+  await scenario("언젠가에 넣으면 '언젠가에'를 붙여 알린다", async () => {
+    const { page, context } = await openApp(browser);
+    await page.evaluate(
+      ([c, b]) => {
+        window.__setFile("someday.md", c);
+        window.__aiBatches = [b];
+      },
+      [`- [ ] 여권 <!-- ai:codex@${NOW + 5} -->\n`, { by: "codex", at: NOW + 5, path: "someday.md", count: 1 }],
+    );
+    await page.clock.runFor(3500);
+    assert.equal(await page.locator(".foot .ai-added .msg").textContent(), "Codex가 언젠가에 1개 추가");
+    await context.close();
+  });
 }

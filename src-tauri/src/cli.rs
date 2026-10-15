@@ -202,15 +202,22 @@ fn home() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap_or_default())
 }
 
-/// 앱과 같은 규칙으로 저장 폴더를 찾는다: 설정 폴더의 location.json이 가리키는 곳, 없으면 기본 폴더
-pub fn data_root() -> PathBuf {
+/// 앱의 설정 폴더와 기본 저장 폴더. 맥에서는 같은 곳이다
+fn app_dirs() -> (PathBuf, PathBuf) {
     #[cfg(target_os = "macos")]
-    let (config, data) = {
+    {
         let base = home().join("Library/Application Support").join(IDENTIFIER);
         (base.clone(), base)
-    };
+    }
     #[cfg(not(target_os = "macos"))]
-    let (config, data) = (home().join(".config").join(IDENTIFIER), home().join(".local/share").join(IDENTIFIER));
+    {
+        (home().join(".config").join(IDENTIFIER), home().join(".local/share").join(IDENTIFIER))
+    }
+}
+
+/// 앱과 같은 규칙으로 저장 폴더를 찾는다: 설정 폴더의 location.json이 가리키는 곳, 없으면 기본 폴더
+pub fn data_root() -> PathBuf {
+    let (config, data) = app_dirs();
     std::fs::read_to_string(config.join("location.json"))
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
@@ -228,6 +235,35 @@ fn external_add_allowed(root: &PathBuf) -> bool {
         .unwrap_or(true)
 }
 
+const BATCH_LOG: &str = "ai-batches.json";
+const BATCH_LOG_KEEP: usize = 20;
+
+/// 최근 추가 기록에 한 묶음을 덧붙이고 오래된 건 버린다
+pub fn append_batch(log: &str, batch: Value) -> String {
+    let mut list: Vec<Value> = serde_json::from_str(log).unwrap_or_default();
+    list.push(batch);
+    let start = list.len().saturating_sub(BATCH_LOG_KEEP);
+    Value::Array(list.split_off(start)).to_string()
+}
+
+/// 화면에 안 보이는 날짜에 넣어도 앱이 알 수 있게, 이 맥의 설정 폴더에 남긴다(동기화 폴더가 아니다)
+fn log_batch(by: &str, at: u64, path: &str, count: usize) {
+    let dir = app_dirs().0;
+    let file = dir.join(BATCH_LOG);
+    let current = std::fs::read_to_string(&file).unwrap_or_default();
+    let next = append_batch(&current, json!({"by": by, "at": at, "path": path, "count": count}));
+    let _ = std::fs::create_dir_all(&dir);
+    let _ = std::fs::write(file, next);
+}
+
+/// 앱이 읽는 최근 추가 기록
+pub fn recent_batches() -> Vec<Value> {
+    std::fs::read_to_string(app_dirs().0.join(BATCH_LOG))
+        .ok()
+        .and_then(|t| serde_json::from_str(&t).ok())
+        .unwrap_or_default()
+}
+
 pub fn add(target: &Target, items: &[String], by: Option<&str>) -> Result<String, String> {
     let root = data_root();
     if !external_add_allowed(&root) {
@@ -236,9 +272,13 @@ pub fn add(target: &Target, items: &[String], by: Option<&str>) -> Result<String
     let rel = target.rel_path();
     let current = storage::read_text(&root, &rel)?.unwrap_or_default();
     let by = by.map(sanitize_tool);
-    let result = add_items(&current, items, by.as_deref().map(|b| (b, now_secs())));
+    let at = now_secs();
+    let result = add_items(&current, items, by.as_deref().map(|b| (b, at)));
     if !result.added.is_empty() {
         storage::write_text(&root, &rel, &result.content)?;
+        if let Some(by) = &by {
+            log_batch(by, at, &rel, result.added.len());
+        }
     }
     let mut msg = format!("{}에 {}개 추가했다.", target.label(), result.added.len());
     if !result.skipped.is_empty() {
@@ -493,6 +533,18 @@ mod tests {
     fn 목록은_체크_상태와_ai_표시를_보여준다() {
         let items = list_items("- [ ] 가 <!-- ai:codex@1 -->\n- [x] 나 <!-- from:2026-10-14 -->\n메모\n");
         assert_eq!(items, s(&["[ ] 가 (AI)", "[x] 나"]));
+    }
+
+    #[test]
+    fn 추가_기록은_최근_20개만_남긴다() {
+        let mut log = String::new();
+        for i in 0..25 {
+            log = append_batch(&log, json!({"at": i}));
+        }
+        let list: Vec<Value> = serde_json::from_str(&log).unwrap();
+        assert_eq!(list.len(), 20);
+        assert_eq!(list[0]["at"], 5);
+        assert_eq!(list[19]["at"], 24);
     }
 
     #[test]

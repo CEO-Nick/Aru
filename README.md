@@ -25,6 +25,28 @@
 
 핀이 켜져 있으면 편집기를 누르든 브라우저를 누르든 Aru가 그 위에 떠 있다. 핀을 끄면 보통 창처럼 뒤로 간다. 슬라이더로 창을 흐리게 하면 뒤의 작업이 비쳐 보이고, 끝까지 내려도 희미하게 남아 창을 잃어버리지 않는다.
 
+## AI에게 "할 일에 넣어줘"
+
+Claude Code, Codex 같은 AI 도구와 대화하다가 "오늘 할 일에 넣어줘"라고 하면 Aru에 바로 들어간다. AI가 넣은 할 일에는 `AI` 태그가 붙고, 태그를 누르거나 손대면 일반 할 일이 된다. 방금 한꺼번에 들어온 할 일은 창 아래에서 한 번에 되돌릴 수 있다. AI는 사용자가 직접 부탁할 때만 넣도록 안내받고, 지우기·고치기·체크는 하지 않는다. 설정에서 끌 수 있다.
+
+```sh
+# Claude Code
+claude mcp add --scope user aru -- /Applications/Aru.app/Contents/MacOS/aru mcp
+# Codex
+codex mcp add aru -- /Applications/Aru.app/Contents/MacOS/aru mcp
+# 터미널 명령으로 쓰기
+ln -s /Applications/Aru.app/Contents/MacOS/aru /usr/local/bin/aru
+aru add "PR 리뷰" "배포 체크"      # 오늘 맨 위에
+aru add --someday "여권 갱신"
+aru list
+```
+
+Claude 데스크톱은 설정의 개발자 탭에서 `claude_desktop_config.json`에 아래를 넣는다.
+
+```json
+{ "mcpServers": { "aru": { "command": "/Applications/Aru.app/Contents/MacOS/aru", "args": ["mcp"] } } }
+```
+
 ## ⌥ Space — 어떤 앱에서든 빠르게
 
 다른 앱을 쓰다가 할 일이 떠오르면 `⌥ Space`. 지금 보고 있는 화면에 입력창이 뜨고, Enter를 누르면 오늘 할 일에 들어간 뒤 하던 앱으로 돌아간다. `Tab`을 누르면 언젠가 목록에 넣는다.
@@ -55,28 +77,6 @@
 ## 할 일은 가볍게 적고 체크
 
 위쪽에는 오늘 할 일, 아래쪽에는 날짜와 상관없는 언젠가 할 일. 적고 Enter를 누르면 추가되고, 체크박스를 누르면 끝낸 일이 된다.
-
-## AI에게 "할 일에 넣어줘"
-
-Claude Code, Codex 같은 AI 도구와 대화하다가 "오늘 할 일에 넣어줘"라고 하면 Aru에 바로 들어간다. AI가 넣은 할 일에는 `AI` 태그가 붙고, 태그를 누르거나 손대면 일반 할 일이 된다. 방금 한꺼번에 들어온 할 일은 창 아래에서 한 번에 되돌릴 수 있다. AI는 사용자가 직접 부탁할 때만 넣도록 안내받고, 지우기·고치기·체크는 하지 않는다. 설정에서 끌 수 있다.
-
-```sh
-# Claude Code
-claude mcp add --scope user aru -- /Applications/Aru.app/Contents/MacOS/aru mcp
-# Codex
-codex mcp add aru -- /Applications/Aru.app/Contents/MacOS/aru mcp
-# 터미널 명령으로 쓰기
-ln -s /Applications/Aru.app/Contents/MacOS/aru /usr/local/bin/aru
-aru add "PR 리뷰" "배포 체크"      # 오늘 맨 위에
-aru add --someday "여권 갱신"
-aru list
-```
-
-Claude 데스크톱은 설정의 개발자 탭에서 `claude_desktop_config.json`에 아래를 넣는다.
-
-```json
-{ "mcpServers": { "aru": { "command": "/Applications/Aru.app/Contents/MacOS/aru", "args": ["mcp"] } } }
-```
 
 ## 할 일은 내 맥의 텍스트 파일로
 

@@ -10,7 +10,8 @@ import TodoList from "./components/TodoList.vue";
 import UpdateButton from "./components/UpdateButton.vue";
 import UpdatedNotice from "./components/UpdatedNotice.vue";
 import { watchDayChange } from "./composables/useDayWatcher";
-import { useAiNotice } from "./composables/useAiNotice";
+import { invoke } from "@tauri-apps/api/core";
+import { useAiNotice, type AiBatch } from "./composables/useAiNotice";
 import { useListDrag } from "./composables/useListDrag";
 import { dayPath, rollover } from "./composables/useRollover";
 import { useSettings } from "./composables/useSettings";
@@ -91,7 +92,15 @@ function openCalendar() {
 }
 
 const drag = useListDrag({ today: todayItems, someday: somedayItems });
-const aiNotice = useAiNotice([todayItems, somedayItems]);
+const aiNotice = useAiNotice({
+  shown: [
+    { path: dayFile.path, items: todayItems },
+    { path: somedayFile.path, items: somedayItems },
+  ],
+  store: tauriStore,
+  recentBatches: () => invoke<AiBatch[]>("recent_ai_batches"),
+  todayPath: () => dayPath(today.value),
+});
 
 const body = ref<HTMLElement>();
 
@@ -122,6 +131,11 @@ function reloadFiles() {
   void somedayFile.reloadIfChanged();
 }
 
+function pollExternal() {
+  reloadFiles();
+  void aiNotice.poll();
+}
+
 onMounted(async () => {
   await Promise.all([loadSettings(), somedayFile.load()]);
   await rollover(today.value, settings, tauriStore, saver, somedayItems);
@@ -134,7 +148,7 @@ onMounted(async () => {
   window.addEventListener("focus", reloadFiles);
   // 항상 떠 있는 창이라 클릭하지 않아도 다른 편집기에서 고친 내용이 보여야 한다
   // AI·명령어가 넣은 할 일이 클릭 없이도 바로 보이게 자주 확인한다. 바뀐 게 없으면 읽기만 하고 끝난다
-  setInterval(reloadFiles, 3_000);
+  setInterval(pollExternal, 3_000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) void saver.flush();
   });
@@ -215,7 +229,7 @@ onMounted(async () => {
       <span class="foot-end">
         <span v-if="aiNotice.notice.value" class="ai-added">
           <span class="msg"
-            >{{ toolLabel(aiNotice.notice.value.by) }}가 {{ aiNotice.notice.value.count }}개 추가</span
+            >{{ toolLabel(aiNotice.notice.value.by) }}가 {{ aiNotice.label(aiNotice.notice.value) }}{{ aiNotice.notice.value.count }}개 추가</span
           >
           <button data-action="undo-ai" @click="aiNotice.undo()">되돌리기</button>
         </span>

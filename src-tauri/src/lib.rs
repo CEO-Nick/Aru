@@ -297,6 +297,12 @@ fn os_version() -> String {
     }
 }
 
+/// aru 명령이 최근에 넣은 묶음들. 화면에 안 보이는 날짜에 넣은 것도 알림을 띄우려고 앱이 주기적으로 읽는다
+#[tauri::command]
+fn recent_ai_batches() -> Vec<serde_json::Value> {
+    cli::recent_batches()
+}
+
 #[tauri::command]
 fn pending_update(state: tauri::State<UpdateState>) -> Option<UpdateInfo> {
     state.0.lock().unwrap().clone()
@@ -489,6 +495,7 @@ pub fn run() {
             pending_update,
             check_update_now,
             os_version,
+            recent_ai_batches,
             install_update
         ])
         .build(context)

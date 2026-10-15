@@ -58,6 +58,8 @@
           return window.__asUpdate(window.__checkResult);
         case "plugin:app|version":
           return "0.2.1";
+        case "recent_ai_batches":
+          return window.__aiBatches ?? [];
         case "os_version":
           return "macOS 15.1";
         case "install_update":
