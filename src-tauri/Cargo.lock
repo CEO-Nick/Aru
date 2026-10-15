@@ -58,7 +58,7 @@ dependencies = [
 
 [[package]]
 name = "aru"
-version = "0.2.5"
+version = "0.2.6"
 dependencies = [
  "objc2-app-kit",
  "serde",
