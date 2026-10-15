@@ -3,7 +3,7 @@ import { removeAiBatch, type TodoItem } from "../core/todoList";
 
 // 이보다 오래전에 넣은 묶음은 "방금 들어온 것"으로 보지 않는다
 const RECENT_SECONDS = 120;
-const SHOW_MS = 10_000;
+const SHOW_MS = 60_000;
 
 export interface AiBatch {
   by: string;

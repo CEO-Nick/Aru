@@ -133,7 +133,8 @@ onMounted(async () => {
   watchDayChange(() => void checkDayChange());
   window.addEventListener("focus", reloadFiles);
   // 항상 떠 있는 창이라 클릭하지 않아도 다른 편집기에서 고친 내용이 보여야 한다
-  setInterval(reloadFiles, 15_000);
+  // AI·명령어가 넣은 할 일이 클릭 없이도 바로 보이게 자주 확인한다. 바뀐 게 없으면 읽기만 하고 끝난다
+  setInterval(reloadFiles, 3_000);
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) void saver.flush();
   });
