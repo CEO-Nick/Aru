@@ -1,6 +1,6 @@
 [package]
 name = "aru"
-version = "0.2.6"
+version = "0.2.7"
 description = "모든 창 위에 떠 있는 macOS 할 일 앱"
 authors = ["조익현"]
 edition = "2024"
