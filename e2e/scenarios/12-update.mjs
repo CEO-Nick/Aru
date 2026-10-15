@@ -152,4 +152,19 @@ export default async function (browser) {
     assert.equal(await page.evaluate(() => localStorage.getItem("aru.lastVersion")), "0.2.1");
     await context.close();
   });
+
+  await scenario("설정의 '의견 보내기'를 누르면 앱 버전과 macOS 버전이 채워진 피드백 폼을 브라우저로 연다", async () => {
+    const { page, context, errors } = await openApp(browser);
+    await openSettings(page);
+    await page.locator('[data-action="feedback"]').click();
+    await page.clock.runFor(10);
+    const opened = await calls(page, "plugin:opener|open_url");
+    assert.equal(opened.length, 1);
+    const url = new URL(opened[0].url);
+    assert.equal(url.origin + url.pathname, "https://tally.so/r/laDqkN");
+    assert.equal(url.searchParams.get("version"), "0.2.1");
+    assert.equal(url.searchParams.get("os"), "macOS 15.1");
+    assert.deepEqual(errors, []);
+    await context.close();
+  });
 }

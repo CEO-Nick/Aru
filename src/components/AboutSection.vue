@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { noteLines, useUpdate } from "../composables/useUpdate";
+import { openFeedback } from "../platform/feedback";
 import UpdateButton from "./UpdateButton.vue";
 
 const { state, check } = useUpdate();
@@ -37,6 +38,10 @@ const note = computed(
       <li v-for="line in lines" :key="line">{{ line }}</li>
     </ul>
     <p v-if="note" class="note">{{ note }}</p>
+    <div class="row feedback">
+      <span class="hint">불편한 점이나 바라는 기능이 있나요?</span>
+      <button class="btn" data-action="feedback" @click="openFeedback">의견 보내기</button>
+    </div>
   </div>
 </template>
 
@@ -69,6 +74,13 @@ const note = computed(
 .btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+.hint {
+  color: var(--muted);
+  font-size: 11.5px;
+}
+.feedback {
+  margin-top: 10px;
 }
 .notes {
   margin: 8px 0 0;

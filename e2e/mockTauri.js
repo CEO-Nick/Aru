@@ -58,6 +58,8 @@
           return window.__asUpdate(window.__checkResult);
         case "plugin:app|version":
           return "0.2.1";
+        case "os_version":
+          return "macOS 15.1";
         case "install_update":
           await new Promise((r) => setTimeout(r, window.__installDelay ?? 0));
           if (window.__failInstall) throw "내려받기 실패(모의)";

@@ -276,6 +276,26 @@ async fn check_update_now(app: AppHandle) -> Result<Option<UpdateInfo>, String> 
     check_update(&app).await
 }
 
+/// 피드백 폼에 채울 OS 버전. 웹뷰의 userAgent는 macOS 버전을 10.15로 고정해 보여 줘서 따로 묻는다
+#[tauri::command]
+fn os_version() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        let out = std::process::Command::new("sw_vers").arg("-productVersion").output();
+        if let Ok(out) = out {
+            let v = String::from_utf8_lossy(&out.stdout).trim().to_string();
+            if !v.is_empty() {
+                return format!("macOS {v}");
+            }
+        }
+        "macOS".into()
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::env::consts::OS.into()
+    }
+}
+
 #[tauri::command]
 fn pending_update(state: tauri::State<UpdateState>) -> Option<UpdateInfo> {
     state.0.lock().unwrap().clone()
@@ -467,6 +487,7 @@ pub fn run() {
             set_data_root,
             pending_update,
             check_update_now,
+            os_version,
             install_update
         ])
         .build(context)

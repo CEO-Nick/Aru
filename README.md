@@ -11,7 +11,7 @@
 
 [**macOS용 다운로드**](https://github.com/CEO-Nick/Aru/releases/latest/download/Aru-mac.zip) · [소개 페이지](https://aruu.dev/aru/)
 
-<sub>무료 · Apple Silicon 맥 · 자동 업데이트 · 서버도 계정도 없음</sub>
+<sub>무료 · Apple Silicon 맥 · 자동 업데이트 · 서버도 계정도 없음 · Windows 출시 예정</sub>
 
 <br>
 
@@ -100,6 +100,10 @@ npm run e2e:webkit     # 같은 시나리오를 WebKit으로
 ```
 
 <sub>Tauri 2 · Vue 3 · TypeScript</sub>
+
+## 의견 보내기
+
+버그나 있었으면 하는 기능은 앱 **설정 → 의견 보내기**, 또는 [로그인 없는 폼](https://tally.so/r/laDqkN)으로 알려 주세요. GitHub 계정이 있다면 [이슈](https://github.com/CEO-Nick/Aru/issues/new/choose)도 좋아요.
 
 ## 라이선스
 
