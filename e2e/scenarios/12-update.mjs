@@ -167,4 +167,18 @@ export default async function (browser) {
     assert.deepEqual(errors, []);
     await context.close();
   });
+
+  await scenario("가장 작은 창에서도 설정 아래 버전·업데이트·의견 보내기 줄이 한 줄로 보인다", async () => {
+    const { page, context } = await openApp(browser, { viewport: { width: 260, height: 470 }, pendingUpdate: "0.2.10" });
+    await openSettings(page);
+    const oneLine = (sel) =>
+      page.locator(sel).evaluate((e) => {
+        const lh = parseFloat(getComputedStyle(e).lineHeight) || parseFloat(getComputedStyle(e).fontSize) * 1.4;
+        return e.getBoundingClientRect().height < lh * 1.8;
+      });
+    for (const sel of [".about .hint", '.about [data-action="feedback"]', ".about .version", '.about [data-action="update"]']) {
+      assert.ok(await oneLine(sel), `${sel}가 두 줄로 꺾였다`);
+    }
+    await context.close();
+  });
 }

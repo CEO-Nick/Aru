@@ -32,6 +32,7 @@ const title = computed(() => {
 
 <style scoped>
 .update {
+  flex: none;
   border: 0;
   border-radius: 999px;
   padding: 1px 8px;

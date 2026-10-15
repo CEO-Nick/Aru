@@ -39,7 +39,7 @@ const note = computed(
     </ul>
     <p v-if="note" class="note">{{ note }}</p>
     <div class="row feedback">
-      <span class="hint">불편한 점이나 바라는 기능이 있나요?</span>
+      <span class="hint">불편하거나 바라는 게 있나요?</span>
       <button class="btn" data-action="feedback" @click="openFeedback">의견 보내기</button>
     </div>
   </div>
@@ -62,6 +62,8 @@ const note = computed(
   font-size: 12px;
 }
 .btn {
+  flex: none;
+  white-space: nowrap;
   border: 1px solid var(--line);
   background: #3a3a3d;
   color: var(--ink);
@@ -76,6 +78,10 @@ const note = computed(
   cursor: default;
 }
 .hint {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--muted);
   font-size: 11.5px;
 }
