@@ -296,8 +296,8 @@ async function midnightScene(browser, carryOver) {
 
 const widths = { overview: 960, quick: 900, window: 900 };
 const fpsOf = { window: 12 };
-// 투명도 장면은 매 프레임 화면 전체가 바뀌어 용량이 커서 색 수를 줄인다
-const colorsOf = { window: 72 };
+// 색 수를 줄이면 파란 핀·창 버튼 색이 회색으로 뭉개진다. 용량보다 실제 모습이 우선이다
+const colorsOf = {};
 const server = await startServer();
 const browser = await launch();
 try {
