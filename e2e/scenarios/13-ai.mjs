@@ -50,7 +50,7 @@ export default async function (browser) {
     await page.clock.runFor(10);
     assert.deepEqual(await texts(page, "today"), ["기획서", "리뷰", "장보기"]);
     const notice = page.locator(".foot .ai-added");
-    assert.equal(await notice.locator(".msg").textContent(), "Claude Code가 2개 추가");
+    assert.equal(await notice.locator(".msg").textContent(), "AI 2개 추가");
     await notice.locator('[data-action="undo-ai"]').click();
     await page.clock.runFor(10);
     assert.deepEqual(await texts(page, "today"), ["장보기"]);
@@ -64,7 +64,7 @@ export default async function (browser) {
       files: { [TODAY]: `- [ ] 예전 <!-- ai:codex@${NOW - 3600} -->\n- [ ] 방금 <!-- ai:codex@${NOW - 5} -->\n` },
     });
     const notice = page.locator(".foot .ai-added");
-    assert.equal(await notice.locator(".msg").textContent(), "Codex가 1개 추가");
+    assert.equal(await notice.locator(".msg").textContent(), "AI 1개 추가");
     await page.clock.runFor(50_000);
     assert.equal(await notice.count(), 1, "1분이 안 됐는데 알림이 사라졌다");
     await page.clock.runFor(11_000);
@@ -92,7 +92,7 @@ export default async function (browser) {
     );
     await page.clock.runFor(3500);
     assert.deepEqual(await texts(page, "today"), ["기획서", "장보기"]);
-    assert.equal(await page.locator(".foot .ai-added .msg").textContent(), "Claude Code가 1개 추가");
+    assert.equal(await page.locator(".foot .ai-added .msg").textContent(), "AI 1개 추가");
     await context.close();
   });
 
@@ -127,7 +127,7 @@ export default async function (browser) {
     );
     await page.clock.runFor(3500);
     const notice = page.locator(".foot .ai-added");
-    assert.equal(await notice.locator(".msg").textContent(), "Claude Code가 10/15에 2개 추가");
+    assert.equal(await notice.locator(".msg").textContent(), "10/15에 AI 2개 추가");
     await notice.locator('[data-action="undo-ai"]').click();
     await page.clock.runFor(10);
     assert.equal((await fs(page))[TOMORROW], "- [ ] 원래 일\n");
@@ -146,7 +146,33 @@ export default async function (browser) {
       [`- [ ] 여권 <!-- ai:codex@${NOW + 5} -->\n`, { by: "codex", at: NOW + 5, path: "someday.md", count: 1 }],
     );
     await page.clock.runFor(3500);
-    assert.equal(await page.locator(".foot .ai-added .msg").textContent(), "Codex가 언젠가에 1개 추가");
+    assert.equal(await page.locator(".foot .ai-added .msg").textContent(), "언젠가에 AI 1개 추가");
+    await context.close();
+  });
+
+  await scenario("가장 작은 창에서도 알림 문구가 잘리지 않고, 넣은 도구 이름은 마우스를 올리면 보인다", async () => {
+    const { page, context } = await openApp(browser, {
+      viewport: { width: 260, height: 470 },
+      files: { [TODAY]: "- [ ] 장보기\n" },
+    });
+    await page.evaluate(
+      ([p, c, b]) => {
+        window.__setFile(p, c);
+        window.__aiBatches = [b];
+      },
+      [
+        "daily/2026-10-15.md",
+        `- [ ] 기획서 <!-- ai:claude-code@${NOW + 5} -->\n`,
+        { by: "claude-code", at: NOW + 5, path: "daily/2026-10-15.md", count: 12 },
+      ],
+    );
+    await page.clock.runFor(3500);
+    const msg = page.locator(".foot .ai-added .msg");
+    assert.equal(await msg.textContent(), "10/15에 AI 12개 추가");
+    assert.ok(await msg.evaluate((e) => e.scrollWidth <= e.clientWidth), "알림 문구가 잘렸다");
+    assert.equal(await page.locator(".foot .ai-added").getAttribute("title"), "Claude Code가 넣었어요");
+    const undo = await page.locator('[data-action="undo-ai"]').boundingBox();
+    assert.ok(undo.x + undo.width <= 260, "되돌리기가 창 밖으로 밀렸다");
     await context.close();
   });
 }

@@ -2,7 +2,8 @@
 import { computed, ref, watch } from "vue";
 import type { SaveStatus } from "../core/autoSaver";
 
-const props = defineProps<{ status: SaveStatus; savedAt?: number | null }>();
+// compact: 옆에 다른 알림이 떠 있을 때 시각을 숨겨 자리를 내준다
+const props = defineProps<{ status: SaveStatus; savedAt?: number | null; compact?: boolean }>();
 
 const label = computed(
   () =>
@@ -14,7 +15,7 @@ const label = computed(
 );
 
 const time = computed(() => {
-  if (props.status !== "saved" || !props.savedAt) return null;
+  if (props.compact || props.status !== "saved" || !props.savedAt) return null;
   const d = new Date(props.savedAt);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 });

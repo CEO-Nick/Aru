@@ -123,10 +123,11 @@ function startSplit(event: PointerEvent) {
 }
 
 // 창을 오갈 때마다 읽지 않도록 2초에 한 번으로 묶는다
-let lastReload = 0;
+let lastReload = -Infinity;
 function reloadFiles() {
-  if (Date.now() - lastReload < 2000) return;
-  lastReload = Date.now();
+  // 시계를 바꿔도 흔들리지 않게 단조 시간으로 잰다
+  if (performance.now() - lastReload < 2000) return;
+  lastReload = performance.now();
   void dayFile.reloadIfChanged();
   void somedayFile.reloadIfChanged();
 }
@@ -225,11 +226,11 @@ onMounted(async () => {
         />
       </section>
     </main>
-    <SaveStatusBar :status="saveStatus" :saved-at="savedAt">
+    <SaveStatusBar :status="saveStatus" :saved-at="savedAt" :compact="!!aiNotice.notice.value">
       <span class="foot-end">
-        <span v-if="aiNotice.notice.value" class="ai-added">
+        <span v-if="aiNotice.notice.value" class="ai-added" :title="`${toolLabel(aiNotice.notice.value.by)}가 넣었어요`">
           <span class="msg"
-            >{{ toolLabel(aiNotice.notice.value.by) }}가 {{ aiNotice.label(aiNotice.notice.value) }}{{ aiNotice.notice.value.count }}개 추가</span
+            >{{ aiNotice.label(aiNotice.notice.value) }}AI {{ aiNotice.notice.value.count }}개 추가</span
           >
           <button data-action="undo-ai" @click="aiNotice.undo()">되돌리기</button>
         </span>
