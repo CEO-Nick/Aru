@@ -349,7 +349,7 @@ onMounted(async () => {
   document.addEventListener("visibilitychange", () => {
     if (document.hidden) void saver.flush();
   });
-  // 작은 창을 닫으면 앱을 끄지 않고 숨긴다. 메뉴 막대 아이콘이나 Dock 아이콘으로 다시 연다
+  // 작은 창을 닫으면 앱을 끄지 않고 숨긴다. Dock 아이콘(Windows는 트레이)으로 다시 연다
   await getCurrentWindow().onCloseRequested(async (event) => {
     event.preventDefault();
     await saveNow();
@@ -374,7 +374,7 @@ onMounted(async () => {
   });
   await onQuitRequested(saveNow);
   // 기다리는 동안 아무 표시가 없으면 종료가 먹지 않은 줄 안다. Rust가 폴더 옮기기를 기다리는 한도(60초)만큼 둔다.
-  // 메뉴 막대 앱이라 창을 숨겨 두었으면 안내가 보이지 않으므로 창을 띄운다
+  // 창을 숨겨 두었으면 안내가 보이지 않으므로 창을 띄운다
   await onQuitWaiting(async () => {
     health.notify("폴더를 옮기는 중이라 끝나면 종료해요", 60_000);
     const win = getCurrentWindow();

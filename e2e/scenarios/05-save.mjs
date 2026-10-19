@@ -84,7 +84,7 @@ export default async function (browser) {
     await context.close();
   });
 
-  await scenario("메뉴 막대에서 종료하면 기다리던 저장을 쓰고 나서 끈다", async () => {
+  await scenario("앱을 종료하면 기다리던 저장을 쓰고 나서 끈다", async () => {
     const { page, context } = await openApp(browser, { files: { [TODAY]: "- [ ] 장보기\n" } });
     await page.locator('[data-list="today"] .item .text').click();
     await caretToEnd(page);

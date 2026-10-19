@@ -163,7 +163,7 @@ export default async function (browser) {
     await context.close();
   });
 
-  await scenario("B14 모아보기 창에서 고치던 중 메뉴 막대로 종료해도 그 내용이 저장되어야 한다", async () => {
+  await scenario("B14 모아보기 창에서 고치던 중 앱을 종료해도 그 내용이 저장되어야 한다", async () => {
     const { page, context } = await openApp(browser, { ...BIG, files: { [TODAY]: "- [ ] 하나\n" } });
     await page.locator('[data-list="overview"] .item .text').click();
     await caretToEnd(page);

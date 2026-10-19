@@ -9,7 +9,10 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
-use tauri::menu::{Menu, MenuBuilder, MenuItem, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+#[cfg(not(target_os = "macos"))]
+use tauri::menu::MenuItem;
+#[cfg(not(target_os = "macos"))]
 use tauri::tray::TrayIconBuilder;
 use tauri::{
     App, AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
@@ -588,6 +591,8 @@ fn build_app_menu(app: &App) -> tauri::Result<Menu<tauri::Wry>> {
     MenuBuilder::new(app).items(&[&app_menu, &edit, &window]).build()
 }
 
+// macOS에는 Dock 아이콘이 같은 일(창 다시 열기·종료)을 해서 메뉴 막대 아이콘을 두지 않는다. Windows는 작업 표시줄 트레이가 그 자리다
+#[cfg(not(target_os = "macos"))]
 fn toggle_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         if window.is_visible().unwrap_or(false) {
@@ -599,6 +604,8 @@ fn toggle_main_window(app: &AppHandle) {
     }
 }
 
+// macOS에는 Dock 아이콘이 같은 일(창 다시 열기·종료)을 해서 메뉴 막대 아이콘을 두지 않는다. Windows는 작업 표시줄 트레이가 그 자리다
+#[cfg(not(target_os = "macos"))]
 fn build_tray(app: &App) -> tauri::Result<()> {
     let toggle = MenuItem::with_id(app, "toggle", "창 보이기/숨기기", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "종료", true, None::<&str>)?;
@@ -692,6 +699,7 @@ pub fn run() {
                 .build(),
         )
         .setup(|app| {
+            #[cfg(not(target_os = "macos"))]
             build_tray(app)?;
             // 다른 앱이 이미 쓰고 있어 등록에 실패해도 앱은 그대로 쓴다
             if let Err(e) = app.global_shortcut().register(quick_shortcut()) {
