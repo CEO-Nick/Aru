@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { fs, openApp, scenario, texts } from "../harness.mjs";
+import { fs, openApp, reload, scenario, texts } from "../harness.mjs";
 
 const settingsFile = (carryOver, lastRolloverDate = "2026-10-14") =>
   JSON.stringify({ carryOver, lastRolloverDate });
@@ -75,16 +75,32 @@ export default async function (browser) {
     await context.close();
   });
 
-  await scenario("처음 켤 때는 아무것도 옮기지 않고 오늘을 기준으로 삼는다(설정 파일은 사용자가 무언가 바꿀 때 처음 쓴다)", async () => {
+  await scenario("설정 파일이 없는 폴더를 처음 켜면 기본(다음 날로)대로 가장 최근 지난 날의 남은 일을 오늘로 한 번 가져온다", async () => {
     const { page, context } = await openApp(browser, {
-      files: { "daily/2026-10-13.md": "- [ ] 어제 일\n" },
+      files: { "daily/2026-10-10.md": "- [ ] 옛날 일\n", "daily/2026-10-13.md": "- [ ] 어제 일\n- [x] 어제 끝냄\n" },
     });
     await page.clock.runFor(1100);
-    assert.equal((await fs(page))["settings.json"], undefined);
-    assert.equal((await fs(page))["daily/2026-10-13.md"], "- [ ] 어제 일\n");
+    assert.deepEqual(await texts(page, "today"), ["어제 일"]);
+    let files = await fs(page);
+    assert.equal(files["daily/2026-10-13.md"], "- [x] 어제 끝냄\n");
+    assert.equal(files["daily/2026-10-10.md"], "- [ ] 옛날 일\n", "가장 최근 지난 날보다 앞은 건드리지 않는다");
+    await reload(page);
+    await page.clock.runFor(1100);
+    assert.deepEqual(await texts(page, "today"), ["어제 일"], "다시 켜도 두 번 옮기지 않는다");
     await page.locator('[aria-label="항상 위에 고정"]').click();
     await page.clock.runFor(1100);
-    assert.equal(JSON.parse((await fs(page))["settings.json"]).lastRolloverDate, "2026-10-14");
+    files = await fs(page);
+    assert.equal(JSON.parse(files["settings.json"]).lastRolloverDate, "2026-10-14");
+    await context.close();
+  });
+
+  await scenario("'그대로 남기기'를 고른 폴더는 처음 켤 때 아무것도 옮기지 않고 오늘을 기준으로 삼는다", async () => {
+    const { page, context } = await openApp(browser, {
+      files: { "daily/2026-10-13.md": "- [ ] 어제 일\n", "settings.json": settingsFile("keep", null) },
+    });
+    await page.clock.runFor(1100);
+    assert.equal((await fs(page))["daily/2026-10-13.md"], "- [ ] 어제 일\n");
+    assert.deepEqual(await texts(page, "today"), []);
     await context.close();
   });
 

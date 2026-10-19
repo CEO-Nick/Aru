@@ -65,3 +65,17 @@ describe("rolloverPending (QA10 R10-9)", () => {
     expect("rolloverPending" in parseSettings('{"rolloverPending":"2026-10-11"}')).toBe(false);
   });
 });
+
+describe("자정 처리 기본값", () => {
+  // 오늘에 집중하는 앱이라 끝내지 못한 일이 지난 날에 묻히지 않고 다음 날로 넘어오는 게 기본이다
+  it("설정 파일이 없거나 값이 빠졌으면 다음 날로 옮긴다", () => {
+    expect(DEFAULT_SETTINGS.carryOver).toBe("next-day");
+    expect(parseSettings(null).carryOver).toBe("next-day");
+    expect(parseSettings('{"opacity": 50}').carryOver).toBe("next-day");
+  });
+
+  it("사용자가 고른 값은 그대로 지킨다", () => {
+    expect(parseSettings('{"carryOver": "keep"}').carryOver).toBe("keep");
+    expect(parseSettings('{"carryOver": "someday"}').carryOver).toBe("someday");
+  });
+});

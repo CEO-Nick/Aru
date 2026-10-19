@@ -95,6 +95,7 @@ export function useStorageHealth() {
           return noting(() => store.writeIf!(path, content, expected));
         },
       }),
+      ...(store.list && { list: (dir: string) => noting(() => store.list!(dir)) }),
     };
   }
 

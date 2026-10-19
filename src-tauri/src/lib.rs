@@ -244,6 +244,11 @@ async fn read_text(window: Window, path: String) -> Result<Option<String>, Strin
     .await
 }
 
+#[tauri::command]
+async fn list_names(path: String) -> Result<Vec<String>, String> {
+    off_main(move || storage::list_names(&data_root()?, &path)).await
+}
+
 // 화면 자동 점검용: 개발 빌드에서 FT_TRACE=1 이면 어느 창이 무엇을 읽고 쓰는지 출력한다
 fn trace(_message: &str) {
     #[cfg(debug_assertions)]
@@ -723,6 +728,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_window_opacity,
             read_text,
+            list_names,
             write_text,
             write_text_if,
             quit_ready,

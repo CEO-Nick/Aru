@@ -82,3 +82,10 @@ describe("switchFolder: 입력칸 글 (QA9-02)", () => {
     expect(order).toContain("flush");
   });
 });
+
+describe("감싼 저장소", () => {
+  it("폴더 목록 보기도 넘겨준다 — 빠지면 자정 정리가 지난 날을 하루씩 읽어 본다", async () => {
+    const store = { read: async () => null, write: async () => {}, list: async () => ["2026-10-13.md"] };
+    expect(await useStorageHealth().guard(store).list?.("daily")).toEqual(["2026-10-13.md"]);
+  });
+});

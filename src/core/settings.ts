@@ -25,7 +25,7 @@ export const DEFAULT_SETTINGS: Settings = {
   alwaysOnTop: true,
   sortChecked: true,
   allowExternalAdd: true,
-  carryOver: "keep",
+  carryOver: "next-day",
   lastRolloverDate: null,
 };
 

@@ -166,7 +166,7 @@ export default async function (browser) {
   });
 
   await scenario("설정의 '자정에 남은 미완료 항목'은 Tab으로 가서 화살표로 고를 수 있다", async () => {
-    const { page, context } = await openApp(browser);
+    const { page, context } = await openApp(browser, { files: { "settings.json": '{"carryOver":"keep"}' } });
     await page.locator('[aria-label="설정"]').click();
     const radios = page.locator('[role="radio"]');
     assert.deepEqual(await radios.evaluateAll((els) => els.map((e) => e.tabIndex)), [0, -1, -1]);

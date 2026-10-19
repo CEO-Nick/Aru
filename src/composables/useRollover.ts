@@ -152,7 +152,14 @@ export async function rollover(
 
 /** 정리 기록이 없는 폴더(설정 없이 할 일만 있던 폴더를 골랐음)의 가장 최근 지난 날. 기록이 없다고 오늘로 두면 그 폴더의 남은 일이 지난 날에 묻힌다 */
 async function latestPastDay(today: string, store: FileStore): Promise<string | null> {
-  for (const date of datesBetween(addDays(today, -MAX_CATCH_UP_DAYS), today).reverse()) {
+  const earliest = addDays(today, -MAX_CATCH_UP_DAYS);
+  if (store.list) {
+    const days = (await store.list("daily"))
+      .map((name) => /^(\d{4}-\d{2}-\d{2})\.md$/.exec(name)?.[1])
+      .filter((date): date is string => !!date && date >= earliest && date < today);
+    return days.sort().at(-1) ?? null;
+  }
+  for (const date of datesBetween(earliest, today).reverse()) {
     try {
       if ((await store.read(dayPath(date))) !== null) return date;
     } catch (e) {

@@ -138,6 +138,23 @@ pub fn read_text(root: &Path, rel: &str) -> Result<Option<String>, String> {
     }
 }
 
+/// 폴더 안 이름들(순서 없음). 폴더가 없으면 빈 목록. 이름을 글로 풀 수 없는 항목은 뺀다
+pub fn list_names(root: &Path, rel: &str) -> Result<Vec<String>, String> {
+    let dir = resolve(root, rel)?;
+    let entries = match fs::read_dir(&dir) {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        r => r.map_err(|e| format!("읽지 못했어요: {}", io_message(&e)))?,
+    };
+    let mut names = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|e| format!("읽지 못했어요: {}", io_message(&e)))?;
+        if let Ok(name) = entry.file_name().into_string() {
+            names.push(name);
+        }
+    }
+    Ok(names)
+}
+
 const READ_TRIES: u32 = 50;
 
 /// 하드링크로 묶인 파일은 제자리에 고쳐 쓰므로(write_in_place) 쓰는 도중 읽으면 비었거나 잘린 내용이 보인다.
@@ -1117,6 +1134,19 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn 폴더_안_이름을_한번에_본다() {
+        let root = temp_root("list");
+        assert_eq!(list_names(&root, "daily").unwrap(), Vec::<String>::new(), "폴더가 없으면 빈 목록");
+        fs::create_dir_all(root.join("daily")).unwrap();
+        fs::write(root.join("daily/2026-10-12.md"), "- [ ] a\n").unwrap();
+        fs::write(root.join("daily/2026-10-13.md"), "").unwrap();
+        let mut names = list_names(&root, "daily").unwrap();
+        names.sort();
+        assert_eq!(names, ["2026-10-12.md", "2026-10-13.md"]);
+        assert!(list_names(&root, "../x").is_err());
     }
 
     #[test]

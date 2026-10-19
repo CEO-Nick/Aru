@@ -51,7 +51,7 @@ export default async function (browser) {
 
   await scenario("못 읽는 지난 날짜로 가면 적을 수 없고 알림이 뜨며, 오늘로 돌아오면 평소대로 저장된다", async () => {
     const { page, context } = await openApp(browser, {
-      files: { [YESTERDAY]: "깨짐" },
+      files: { [YESTERDAY]: "깨짐", "settings.json": '{"carryOver":"keep"}' },
       globals: { __badReads: [YESTERDAY] },
     });
     await page.locator('[aria-label="이전 날"]').click();
@@ -143,7 +143,7 @@ export default async function (browser) {
   });
 
   await scenario("폴더가 없는 동안 다른 날로 오가며 적은 것도 폴더가 돌아오면 각 파일에 합쳐 저장된다", async () => {
-    const { page, context } = await openApp(browser, { rootUnavailable: true, files: { [YESTERDAY]: "- [ ] 원래\n" } });
+    const { page, context } = await openApp(browser, { rootUnavailable: true, files: { [YESTERDAY]: "- [ ] 원래\n", "settings.json": '{"carryOver":"keep"}' } });
     await add(page, "오늘 적음");
     await page.locator('[aria-label="이전 날"]').click();
     await page.clock.runFor(10);

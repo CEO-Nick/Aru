@@ -12,6 +12,8 @@ export interface FileStore {
    * 읽고 쓰는 사이에 aru 명령·다른 창이 쓴 것을 덮어쓰지 않으려고 쓴다
    */
   writeIf?(path: string, content: string, expected: string | null): Promise<WriteIfResult>;
+  /** 폴더 안 이름들. 폴더가 없으면 빈 목록 */
+  list?(dir: string): Promise<string[]>;
 }
 
 const MAX_ATTEMPTS = 5;

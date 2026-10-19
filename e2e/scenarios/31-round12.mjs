@@ -160,7 +160,7 @@ export default async function (browser) {
   });
 
   await scenario("R12-5 느린 켜기(읽기 6초) 도중 ⌥Space 창이 같은 저장소로 뜸 → 지난 거울 글은 지워지지 않고 작은 창이 한 번만 넣는다", async () => {
-    const { page, context } = await openApp(browser, { files: { [D14]: "- [ ] a\n", "someday.md": "- [ ] s\n" } });
+    const { page, context } = await openApp(browser, { files: { [D14]: "- [ ] a\n", "someday.md": "- [ ] s\n", "settings.json": '{"carryOver":"keep"}' } });
     await page.evaluate(() => localStorage.setItem("aru.draft.quick.someday", "느린켜기"));
     await context.addInitScript(`if (!location.hash) window.__readDelay = 6000;`);
     // 작은 창을 다시 켜는 중(읽기 느림)

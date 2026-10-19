@@ -147,7 +147,7 @@ async function storage(browser) {
   });
 
   await scenario("G02 폴더를 열 수 없는 동안 두 날짜에 적고, 폴더가 돌아오면 두 날 모두 바깥 변경과 합쳐 저장한다", async () => {
-    const files = { [TODAY]: "- [ ] 오늘 원래\n", [YESTERDAY]: "- [ ] 어제 원래\n" };
+    const files = { [TODAY]: "- [ ] 오늘 원래\n", [YESTERDAY]: "- [ ] 어제 원래\n", "settings.json": '{"carryOver":"keep"}' };
     const { page, context } = await openApp(browser, { files, rootUnavailable: true });
     await page.clock.runFor(100);
     await add(page, "오늘 새로");

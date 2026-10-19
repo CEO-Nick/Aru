@@ -127,7 +127,7 @@ export default async function (browser) {
   });
 
   await scenario("저장(QA4 N04) 날짜를 빠르게 ◀▶▶ 오가며 매번 고쳐도(쓰기 0.2초) 각 날 파일에 제 고침만 들어간다", async () => {
-    const files = { [YESTERDAY]: "- [ ] 어제 일\n", [TODAY]: "- [ ] 오늘 일\n", [TOMORROW]: "- [ ] 내일 일\n" };
+    const files = { [YESTERDAY]: "- [ ] 어제 일\n", [TODAY]: "- [ ] 오늘 일\n", [TOMORROW]: "- [ ] 내일 일\n", "settings.json": '{"carryOver":"keep"}' };
     const { page, context } = await openApp(browser, { files, globals: { __writeDelay: 200 } });
     await page.clock.runFor(2400);
     await typeAtEnd(page, 0, "A");

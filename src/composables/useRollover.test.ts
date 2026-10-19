@@ -295,4 +295,38 @@ describe("정리 기록이 없는 폴더 (QA10 R10-12)", () => {
     expect(reads).toEqual([]);
     expect(settings.value.lastRolloverDate).toBe("2026-10-14");
   });
+
+  // 다음 날로가 기본이라 처음 켜는 모든 폴더가 여기로 온다. 400일을 하루씩 읽지 않고 목록을 한 번 본다
+  const listing = (files: Map<string, string>) => async (dir: string) =>
+    [...files.keys()].filter((p) => p.startsWith(`${dir}/`)).map((p) => p.slice(dir.length + 1));
+
+  it("새 폴더면 지난 날을 하루씩 읽어 보지 않고 목록 한 번으로 끝낸다", async () => {
+    const { files, store } = memory({});
+    store.list = listing(files);
+    const reads: string[] = [];
+    const read = store.read;
+    store.read = (p) => (reads.push(p), read(p));
+    const settings = settingsWith({ carryOver: "next-day", lastRolloverDate: null });
+    await rollover("2026-10-14", settings, store, new AutoSaver(store), ref([]));
+    expect(reads).toEqual([]);
+    expect(settings.value.lastRolloverDate).toBe("2026-10-14");
+  });
+
+  it("목록으로 찾아도 가장 최근 지난 날부터 정리한다", async () => {
+    const { files, store } = memory({ "daily/2026-10-10.md": "- [ ] 옛날\n", "daily/2026-10-12.md": "- [ ] 밀린일\n" });
+    store.list = listing(files);
+    const settings = settingsWith({ carryOver: "next-day", lastRolloverDate: null });
+    await rollover("2026-10-14", settings, store, new AutoSaver(store), ref([]));
+    expect(files.get("daily/2026-10-14.md")).toBe("- [ ] 밀린일 <!-- from:2026-10-12 -->\n");
+    expect(files.get("daily/2026-10-10.md")).toBe("- [ ] 옛날\n");
+  });
+
+  it("목록에서 날짜 파일이 아닌 것·오늘 이후·너무 오래된 날은 고르지 않는다", async () => {
+    const { files, store } = memory({ "daily/2026-10-14.md": "- [ ] 오늘\n" });
+    store.list = async () => ["2026-10-14.md", "2026-10-20.md", "notes.md", ".2026-10-13.md.icloud", "2020-01-01.md", "2026-10-13.md.bak"];
+    const settings = settingsWith({ carryOver: "next-day", lastRolloverDate: null });
+    await rollover("2026-10-14", settings, store, new AutoSaver(store), ref([]));
+    expect(files.get("daily/2026-10-14.md")).toBe("- [ ] 오늘\n");
+    expect(settings.value.lastRolloverDate).toBe("2026-10-14");
+  });
 });

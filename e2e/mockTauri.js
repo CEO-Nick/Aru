@@ -53,6 +53,15 @@
           await new Promise((r) => setTimeout(r, window.__readDelay ?? 0));
           return window.__snapRead ? snap : (window.__mockFs[args.path] ?? null);
         }
+        case "list_names": {
+          if (!rootOk()) throw rootError();
+          const prefix = `${args.path}/`;
+          const names = Object.keys(window.__mockFs)
+            .filter((p) => p.startsWith(prefix) && !p.slice(prefix.length).includes("/"))
+            .map((p) => p.slice(prefix.length));
+          await new Promise((r) => setTimeout(r, window.__readDelay ?? 0));
+          return names;
+        }
         case "write_text":
           // 외장 디스크·네트워크 폴더처럼 쓰기가 느린 경우. 비교와 쓰기는 지연이 끝날 때 한 번에 한다
           if (window.__writeDelay) await new Promise((r) => setTimeout(r, window.__writeDelay));

@@ -20,7 +20,7 @@ export default async function (browser) {
   await scenario("미완료 처리를 '다음 날로'로 바꾸면 저장되고, 그날 자정에 바로 적용된다", async () => {
     const { page, context } = await openApp(browser, {
       now: "2026-10-14T23:58:00",
-      files: { "daily/2026-10-14.md": "- [ ] PR 리뷰\n" },
+      files: { "daily/2026-10-14.md": "- [ ] PR 리뷰\n", "settings.json": '{"carryOver":"keep"}' },
     });
     await page.locator('[aria-label="설정"]').click();
     await page.locator(".radio", { hasText: "다음 날로 옮기기" }).click();

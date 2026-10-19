@@ -4,7 +4,7 @@ import { fs, openApp, scenario, texts, caretToEnd } from "../harness.mjs";
 export default async function (browser) {
   await scenario("◀ 로 어제로 가면 어제 할 일이 보이고 '지난 날짜' 꼬리표가 붙는다, 고치면 어제 파일에 저장", async () => {
     const { page, context, errors } = await openApp(browser, {
-      files: { "daily/2026-10-13.md": "- [ ] 어제 일\n", "daily/2026-10-14.md": "- [ ] 오늘 일\n" },
+      files: { "daily/2026-10-13.md": "- [ ] 어제 일\n", "daily/2026-10-14.md": "- [ ] 오늘 일\n", "settings.json": '{"carryOver":"keep"}' },
     });
     await page.locator('[aria-label="이전 날"]').click();
     await page.clock.runFor(10);

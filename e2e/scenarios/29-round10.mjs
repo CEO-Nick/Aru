@@ -421,7 +421,7 @@ export default async function (browser) {
 
   // ── 저장 실패 표시 유지 ──
   await scenario("R10-13 오늘 파일 저장 실패 중 ◀ 다른 날 저장이 성공해도 '저장 실패'가 남고, 회복되면 오늘 글이 1번 저장", async () => {
-    const { page, context } = await openApp(browser, { files: { [D14]: "- [ ] a\n", [D13]: "- [ ] b\n" } });
+    const { page, context } = await openApp(browser, { files: { [D14]: "- [ ] a\n", [D13]: "- [ ] b\n", "settings.json": '{"carryOver":"keep"}' } });
     await page.evaluate((p) => (window.__failPaths = [p]), D14);
     await itemText(page, 0).click();
     await caretToEnd(page);
