@@ -1,9 +1,13 @@
+import { isIsoDate } from "./date";
+
 function monthDay(isoDate: string): [number, number] {
   const [, month, day] = isoDate.split("-").map(Number);
   return [month, day];
 }
 
+// 표시 정보는 손으로 고친 파일에서도 오므로 달력에 없는 날짜·시각이면 그 부분만 빼고 보여준다
 export function fromTagLabel(isoDate: string): string {
+  if (!isIsoDate(isoDate)) return "지난 날에서 넘어옴";
   const [month, day] = monthDay(isoDate);
   return `${month}/${day}에서 넘어옴`;
 }
@@ -34,6 +38,7 @@ export function toolLabel(by: string): string {
 
 export function aiTagTitle(ai: { by: string; at: number }): string {
   const d = new Date(ai.at * 1000);
+  if (Number.isNaN(d.getTime())) return `${toolLabel(ai.by)}가 추가 · 누르면 확인`;
   const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
   return `${toolLabel(ai.by)}가 ${time}에 추가 · 누르면 확인`;
 }

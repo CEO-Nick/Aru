@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseDocument, parseTodos, serializeDocument, serializeTodos } from "./markdown";
+import { normalizeTodoText } from "./text";
 
 describe("serializeDocument", () => {
   it("메모는 할 일 아래에 빈 줄 하나를 두고 쓴다", () => {
@@ -26,9 +27,9 @@ describe("serializeDocument", () => {
     );
   });
 
-  it("할 일 사이에 끼어 있던 메모는 할 일 아래로 모인다", () => {
+  it("할 일 사이에 끼어 있던 메모는 그 자리에 남는다", () => {
     const doc = parseDocument("- [ ] 하나\n메모\n- [ ] 둘\n");
-    expect(serializeDocument(doc)).toBe("- [ ] 하나\n- [ ] 둘\n\n메모\n");
+    expect(serializeDocument(doc)).toBe("- [ ] 하나\n메모\n- [ ] 둘\n");
   });
 });
 
@@ -141,9 +142,11 @@ describe("버그 수정: 형식", () => {
   });
 
   it("첫 할 일보다 앞에 있거나 빈 줄 뒤에 있는 들여쓴 줄은 메모다", () => {
-    const doc = parseDocument("  앞 메모\n- [ ] 하나\n\n  떨어진 메모\n");
+    const md = "  앞 메모\n- [ ] 하나\n\n  떨어진 메모\n";
+    const doc = parseDocument(md);
     expect(doc.todos).toEqual([{ text: "하나", done: false }]);
-    expect(doc.notes).toBe("  앞 메모\n\n  떨어진 메모");
+    expect(doc.notes).toBe("  떨어진 메모");
+    expect(serializeDocument(doc)).toBe(md);
   });
 
   it("글자가 넘어온 날짜 주석처럼 끝나도 다시 읽으면 글자가 그대로다", () => {
@@ -193,5 +196,160 @@ describe("AI가 넣은 할 일 표시", () => {
       { text: "하나", done: false, from: "2026-10-13" },
       { text: "둘", done: false },
     ]);
+  });
+});
+
+describe("UI-03: 줄바꿈 계열 글자가 섞인 할 일", () => {
+  it("U+2028·U+2029·CR이 든 할 일 줄이 이미 파일에 있어도 할 일로 읽는다", () => {
+    expect(parseTodos("- [ ] 회의 준비\u2028자료\n- [ ] 가\u2029나\n- [ ] 첫줄\r둘째줄\n")).toEqual([
+      { text: "회의 준비 자료", done: false },
+      { text: "가 나", done: false },
+      { text: "첫줄 둘째줄", done: false },
+    ]);
+  });
+
+  it("저장할 때 할 일 글자 속 줄바꿈 계열 글자는 공백이 되어 다시 읽어도 할 일이다", () => {
+    for (const text of ["a\u2028b", "a\u2029b", "a\rb"]) {
+      const out = serializeTodos([{ text, done: false }]);
+      expect(out).toBe("- [ ] a b\n");
+      expect(parseTodos(out)).toEqual([{ text: "a b", done: false }]);
+    }
+  });
+});
+
+describe("UI-04: 앱이 모르는 줄의 자리와 모양", () => {
+  it("할 일 위의 제목과 빈 줄은 체크하고 저장해도 위에 남는다", () => {
+    const doc = parseDocument("# 10월 14일 계획\n\n- [ ] 가\n- [ ] 나\n");
+    doc.todos = [doc.todos[1], { ...doc.todos[0], done: true }];
+    expect(serializeDocument(doc)).toBe("# 10월 14일 계획\n\n- [ ] 나\n- [x] 가\n");
+  });
+
+  it("할 일 사이의 줄은 바로 뒤 할 일 앞에 붙어 다닌다", () => {
+    const doc = parseDocument("## 오전\n- [ ] 가\n## 오후\n- [ ] 나\n");
+    expect(serializeDocument(doc)).toBe("## 오전\n- [ ] 가\n## 오후\n- [ ] 나\n");
+    doc.todos = [doc.todos[1], { ...doc.todos[0], done: true }];
+    expect(serializeDocument(doc)).toBe("## 오전\n## 오후\n- [ ] 나\n- [x] 가\n");
+  });
+
+  it("붙어 있던 할 일을 지우거나 고쳐도 그 줄은 원래 순번 자리에 남는다", () => {
+    const doc = parseDocument("- [ ] 가\n## 오후\n- [ ] 나\n- [ ] 다\n");
+    doc.todos = [doc.todos[0], doc.todos[2]];
+    expect(serializeDocument(doc)).toBe("- [ ] 가\n## 오후\n- [ ] 다\n");
+    doc.todos = [doc.todos[0]];
+    expect(serializeDocument(doc)).toBe("- [ ] 가\n## 오후\n");
+  });
+
+  it("맨 위에 넣은 할 일은 제목 아래, 기존 할 일 위에 들어간다", () => {
+    const doc = parseDocument("# 제목\n- [ ] 가\n");
+    doc.todos = [{ text: "새", done: false }, ...doc.todos];
+    expect(serializeDocument(doc)).toBe("# 제목\n- [ ] 새\n- [ ] 가\n");
+  });
+
+  it("손대지 않은 줄은 목록 기호(*, +)와 대문자 X를 그대로 쓰고, 체크를 바꾼 줄만 앱 형식으로 쓴다", () => {
+    const md = "* [ ] 별\n+ [X] 더하기\n- [X] 대문자\n";
+    const doc = parseDocument(md);
+    expect(serializeDocument(doc)).toBe(md);
+    doc.todos[2] = { ...doc.todos[2], done: false };
+    expect(serializeDocument(doc)).toBe("* [ ] 별\n+ [X] 더하기\n- [ ] 대문자\n");
+  });
+
+  it("코드 블록 안의 할 일 모양 줄은 할 일이 아니고 그대로 남는다", () => {
+    const md = "- [ ] 진짜\n\n```md\n- [ ] 예시 줄\n```\n";
+    const doc = parseDocument(md);
+    expect(doc.todos).toEqual([{ text: "진짜", done: false }]);
+    expect(serializeDocument(doc)).toBe(md);
+    doc.todos[0] = { ...doc.todos[0], done: true };
+    expect(serializeDocument(doc)).toBe("- [x] 진짜\n\n```md\n- [ ] 예시 줄\n```\n");
+  });
+
+  it("할 일 사이에 있는 코드 블록도 줄 하나 바뀌지 않는다", () => {
+    const md = "- [ ] 가\n~~~\n- [ ] 안\n\n~~~\n- [ ] 나\n";
+    const doc = parseDocument(md);
+    expect(doc.todos.map((t) => t.text)).toEqual(["가", "나"]);
+    expect(serializeDocument(doc)).toBe(md);
+  });
+
+  it("BOM으로 시작하는 파일도 첫 할 일을 읽고, 쓸 때 BOM을 되돌려 둔다", () => {
+    const md = "\ufeff- [ ] 첫째\n- [ ] 둘째\n";
+    const doc = parseDocument(md);
+    expect(doc.todos.map((t) => t.text)).toEqual(["첫째", "둘째"]);
+    expect(serializeDocument(doc)).toBe(md);
+  });
+
+  it("마지막 할 일과 아래 메모 사이의 빈 줄 개수를 지킨다", () => {
+    expect(serializeDocument(parseDocument("- [ ] 가\n메모\n"))).toBe("- [ ] 가\n메모\n");
+    expect(serializeDocument(parseDocument("- [ ] 가\n\n\n메모\n"))).toBe("- [ ] 가\n\n\n메모\n");
+  });
+});
+
+describe("UI-12: NBSP", () => {
+  it("할 일 글자 속 NBSP와 BOM은 파일에 쓰지 않는다", () => {
+    expect(serializeTodos([{ text: "a\u00a0\u00a0b\u00a0\ufeff", done: false }])).toBe("- [ ] a  b \n");
+  });
+});
+
+describe("UI-14: 표시 주석 앞의 끝 공백", () => {
+  it("끝 공백이 있는 글자에 넘어온 날짜·AI 표시가 붙어도 다시 읽으면 끝 공백이 남는다", () => {
+    for (const todo of [
+      { text: "보고서 ", done: false, from: "2026-10-13" },
+      { text: "1  ", done: false, ai: { by: "codex", at: 1 } },
+    ]) {
+      expect(parseTodos(serializeTodos([todo]))).toEqual([todo]);
+    }
+  });
+
+  it("주석 앞 공백이 없거나 한 칸인 기존 파일은 전과 같이 읽는다", () => {
+    expect(parseTodos("- [ ] 가<!-- from:2026-10-13 -->\n- [ ] 나 <!-- from:2026-10-13 -->\n")).toEqual([
+      { text: "가", done: false, from: "2026-10-13" },
+      { text: "나", done: false, from: "2026-10-13" },
+    ]);
+  });
+});
+
+describe("저장 후 다시 읽기 왕복", () => {
+  it("무작위 글자·표시·메모 배치에서도 할 일과 메모 줄이 그대로 돌아온다", () => {
+    let seed = 7;
+    const rand = (n: number) => ((seed = (seed * 1103515245 + 12345) % 2 ** 31), seed % n);
+    const pieces = ["가", "a", " ", "  ", "\u2028", "\u2029", "\r", "\r\n", "\n", "\u00a0", "\ufeff", "<!-- from:2026-01-01 -->", "<!-- ai:x@1 -->", "- [ ] ", "```", "#"];
+    const text = () => Array.from({ length: rand(6) }, () => pieces[rand(pieces.length)]).join("");
+    for (let n = 0; n < 3000; n++) {
+      const todos = Array.from({ length: 1 + rand(4) }, () => ({
+        text: text(),
+        done: rand(2) === 0,
+        ...(rand(3) === 0 ? { from: "2026-10-13" } : {}),
+        ...(rand(4) === 0 ? { ai: { by: "codex", at: 1 } } : {}),
+      }));
+      const written = todos.filter((t) => normalizeTodoText(t.text).trim() !== "");
+      const md = serializeTodos(todos);
+      expect(parseTodos(md)).toEqual(written.map((t) => ({ ...t, text: normalizeTodoText(t.text) })));
+      expect(serializeTodos(parseTodos(md))).toBe(md);
+    }
+  });
+
+  it("메모가 섞인 파일은 손대지 않고 저장하면 한 글자도 바뀌지 않는다", () => {
+    for (const md of [
+      "# 제목\n\n- [ ] 가\n- [x] 나 <!-- from:2026-10-13 -->\n  - [ ] 하위\n## 오후\n\n* [X] 다\n\n메모\n\n끝\n",
+      "\ufeff\n- [ ] 가\n```\n- [ ] 코드\n```\n- [ ] 나\n메모\n",
+      "메모만\n",
+      "",
+    ]) {
+      expect(serializeDocument(parseDocument(md))).toBe(md);
+    }
+  });
+});
+
+describe("QA4-04: 보이지 않는 글자만 있는 할 일", () => {
+  it("파일에 쓰지 않는다(하위 줄이 없을 때). 보이는 글자가 있는 할 일은 그대로 쓴다", () => {
+    const out = serializeDocument({
+      todos: [
+        { text: "하나", done: false },
+        { text: "​", done: true },
+        { text: "ㅤ⠀", done: false },
+        { text: "‎", done: false, children: ["  - 메모"] },
+        { text: "👨‍👩‍👧", done: false },
+      ],
+      notes: "",
+    });
+    expect(out).toBe("- [ ] 하나\n- [ ] ‎\n  - 메모\n- [ ] 👨‍👩‍👧\n");
   });
 });

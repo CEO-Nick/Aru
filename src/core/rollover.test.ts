@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { carryOver, datesBetween } from "./rollover";
+import { addDays } from "./date";
+import { carryOver, datesBetween, MAX_CATCH_UP_DAYS } from "./rollover";
 import type { TodoItem } from "./todoList";
 
 const t = (id: string, text: string, done = false, from?: string): TodoItem =>
@@ -55,5 +56,34 @@ describe("carryOver", () => {
     expect(result.today).toEqual([]);
     expect(result.someday).toEqual([t("s", "여권"), t("b", "PR 리뷰", false, "2026-10-13")]);
     expect(result.pastDays[0].items).toEqual([t("a", "회의", true)]);
+  });
+});
+
+describe("UI-15: 따라잡는 날 수 상한", () => {
+  it("아주 오래 꺼져 있었어도 오늘 전 MAX_CATCH_UP_DAYS일까지만 돌려준다", () => {
+    const dates = datesBetween("2000-01-01", "2026-10-15");
+    expect(dates.length).toBe(MAX_CATCH_UP_DAYS);
+    expect(dates.at(-1)).toBe("2026-10-14");
+    expect(dates[0]).toBe(addDays("2026-10-15", -MAX_CATCH_UP_DAYS));
+  });
+
+  it("날짜 형식이 아니면 빈 목록이다", () => {
+    expect(datesBetween("0000-00-00", "2026-10-15")).toEqual([]);
+  });
+});
+
+describe("carryOver: 빈 칸 할 일 (QA6-02)", () => {
+  const past = [{ date: "2026-10-13", items: [t("a", "할 일"), t("b", "\u3164"), t("c", "끝", true)] }];
+
+  it("'다음 날로'면 눈에 빈 할 일은 옮기지 않고 그날에 그대로 둔다", () => {
+    const result = carryOver("next-day", past, [], []);
+    expect(result.today.map((i) => i.text)).toEqual(["할 일"]);
+    expect(result.pastDays[0].items.map((i) => i.id)).toEqual(["b", "c"]);
+  });
+
+  it("'언젠가로'도 같다", () => {
+    const result = carryOver("someday", past, [], []);
+    expect(result.someday.map((i) => i.text)).toEqual(["할 일"]);
+    expect(result.pastDays[0].items.map((i) => i.id)).toEqual(["b", "c"]);
   });
 });

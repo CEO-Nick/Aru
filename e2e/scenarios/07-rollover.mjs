@@ -75,13 +75,16 @@ export default async function (browser) {
     await context.close();
   });
 
-  await scenario("처음 켤 때는 아무것도 옮기지 않고 오늘을 기준으로 삼는다", async () => {
+  await scenario("처음 켤 때는 아무것도 옮기지 않고 오늘을 기준으로 삼는다(설정 파일은 사용자가 무언가 바꿀 때 처음 쓴다)", async () => {
     const { page, context } = await openApp(browser, {
       files: { "daily/2026-10-13.md": "- [ ] 어제 일\n" },
     });
     await page.clock.runFor(1100);
-    assert.equal(JSON.parse((await fs(page))["settings.json"]).lastRolloverDate, "2026-10-14");
+    assert.equal((await fs(page))["settings.json"], undefined);
     assert.equal((await fs(page))["daily/2026-10-13.md"], "- [ ] 어제 일\n");
+    await page.locator('[aria-label="항상 위에 고정"]').click();
+    await page.clock.runFor(1100);
+    assert.equal(JSON.parse((await fs(page))["settings.json"]).lastRolloverDate, "2026-10-14");
     await context.close();
   });
 

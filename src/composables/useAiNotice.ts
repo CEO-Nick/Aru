@@ -1,7 +1,7 @@
 import { ref, watch, type Ref } from "vue";
 import { removeAiBatch, type TodoItem } from "../core/todoList";
 import { dumpItems, parseItems } from "../core/todoFile";
-import type { FileStore } from "../platform/fileStore";
+import { updateFile, type FileStore } from "../platform/fileStore";
 
 // 이보다 오래전에 넣은 묶음은 "방금 들어온 것"으로 보지 않는다
 const RECENT_SECONDS = 120;
@@ -18,6 +18,8 @@ export interface AiBatch {
 export interface ShownList {
   path: Ref<string>;
   items: Ref<TodoItem[]>;
+  /** 목록에 지금 이 파일 내용이 열려 있는가. 날짜를 바꿔 읽는 중이면 목록은 비어 있으니 파일을 본다 */
+  open: () => boolean;
 }
 
 interface Options {
@@ -29,7 +31,9 @@ interface Options {
   todayPath: () => string;
 }
 
-const key = (b: { by: string; at: number }) => `${b.by}@${b.at}`;
+// 같은 도구가 같은 초에 다른 파일에 넣은 묶음은 다른 묶음이다. 파일 경로까지 넣어야 알림·되돌리기가 섞이지 않는다
+const key = (b: { by: string; at: number; path: string }) => `${b.path}|${b.by}@${b.at}`;
+const sameBatch = (a: { by: string; at: number }, b: { by: string; at: number }) => a.by === b.by && a.at === b.at;
 const marker = (b: { by: string; at: number }) => `ai:${b.by}@${b.at}`;
 
 /** 알림 문구에 붙일 위치. 오늘이면 붙이지 않는다 */
@@ -47,11 +51,14 @@ export function placeLabel(path: string, todayPath: string): string {
 export function useAiNotice({ shown, store, recentBatches, todayPath }: Options) {
   const notice = ref<AiBatch | null>(null);
   const announced = new Set<string>();
+  /** 다른 묶음이 들어와 알림에서 밀려난 묶음. 지금 알림을 되돌리거나 다 확인하면 이어서 보여 준다 */
+  const waiting: AiBatch[] = [];
   let timer: ReturnType<typeof setTimeout> | undefined;
 
-  const shownFor = (path: string) => shown.find((l) => l.path.value === path);
+  const shownFor = (path: string) => shown.find((l) => l.path.value === path && l.open());
 
   function show(batch: AiBatch) {
+    if (notice.value && key(notice.value) !== key(batch)) waiting.push(notice.value);
     announced.add(key(batch));
     notice.value = batch;
     clearTimeout(timer);
@@ -65,13 +72,22 @@ export function useAiNotice({ shown, store, recentBatches, todayPath }: Options)
 
   const isRecent = (at: number) => Math.floor(Date.now() / 1000) - at <= RECENT_SECONDS;
 
+  function showWaiting() {
+    while (waiting.length) {
+      const batch = waiting.pop()!;
+      const list = shownFor(batch.path);
+      const present = list ? list.items.value.some((item) => item.ai && sameBatch(item.ai, batch)) : true;
+      if (isRecent(batch.at) && present) return show(batch);
+    }
+  }
+
   /** 화면에 보이는 목록에서 방금 들어온 묶음을 찾는다 */
   function scanShown() {
     const found = new Map<string, AiBatch>();
     for (const list of shown) {
       for (const item of list.items.value) {
         if (!item.ai || !isRecent(item.ai.at)) continue;
-        const k = key(item.ai);
+        const k = key({ ...item.ai, path: list.path.value });
         const batch = found.get(k) ?? { ...item.ai, count: 0, path: list.path.value };
         batch.count++;
         found.set(k, batch);
@@ -87,9 +103,12 @@ export function useAiNotice({ shown, store, recentBatches, todayPath }: Options)
     if (!batch) return;
     const list = shownFor(batch.path);
     const remaining = list
-      ? list.items.value.some((item) => item.ai && key(item.ai) === key(batch))
-      : ((await store.read(batch.path)) ?? "").includes(marker(batch));
-    if (!remaining && notice.value === batch) hide();
+      ? list.items.value.some((item) => item.ai && sameBatch(item.ai, batch))
+      : ((await store.read(batch.path).catch(() => marker(batch))) ?? "").includes(marker(batch));
+    if (!remaining && notice.value === batch) {
+      hide();
+      showWaiting();
+    }
   }
 
   /** aru 명령의 기록을 확인한다. 앱이 주기적으로 부른다 */
@@ -107,12 +126,22 @@ export function useAiNotice({ shown, store, recentBatches, todayPath }: Options)
     const list = shownFor(batch.path);
     if (list) {
       list.items.value = removeAiBatch(list.items.value, batch);
+      showWaiting();
       return;
     }
-    const content = (await store.read(batch.path)) ?? "";
-    let n = 0;
-    const { items, notes } = parseItems(content, () => `u${++n}`);
-    await store.write(batch.path, dumpItems(removeAiBatch(items, batch), notes));
+    try {
+      // 읽고 쓰는 사이 aru 명령이 더 넣었으면 다시 읽어 그 묶음만 뺀다
+      await updateFile(store, batch.path, (content) => {
+        let n = 0;
+        const { items, doc } = parseItems(content, () => `u${++n}`);
+        return dumpItems(removeAiBatch(items, batch), doc);
+      });
+    } catch {
+      // 못 읽은 파일에는 쓰지 않는다. 알림을 되살려 다시 누를 수 있게 둔다
+      show(batch);
+      return;
+    }
+    showWaiting();
   }
 
   watch(

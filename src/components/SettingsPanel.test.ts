@@ -34,6 +34,15 @@ describe("SettingsPanel", () => {
     expect(wrapper.emitted("reveal-folder")).toHaveLength(1);
   });
 
+  it("저장 폴더 이름을 짧게 보여 주고 전체 경로는 마우스를 올리면 보인다", () => {
+    const path = "/Users/me/Library/Containers/dev.aruu.aru/Data/Library/Application Support/dev.aruu.aru";
+    const wrapper = mount(SettingsPanel, {
+      props: { carryOver: "keep", sortChecked: true, allowExternalAdd: true, dataRoot: path, dataRootLabel: "기본 폴더 (Aru 안)" },
+    });
+    expect(wrapper.find(".path").text()).toBe("기본 폴더 (Aru 안)");
+    expect(wrapper.find(".path").attributes("title")).toBe(path);
+  });
+
   it("닫기 버튼을 누르면 목록으로 돌아가라고 알린다", async () => {
     const wrapper = mountPanel();
     await wrapper.find('[data-action="close"]').trigger("click");

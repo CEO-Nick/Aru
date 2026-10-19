@@ -3,19 +3,35 @@ import { computed, ref, watch } from "vue";
 import type { SaveStatus } from "../core/autoSaver";
 
 // compact: 옆에 다른 알림이 떠 있을 때 시각을 숨겨 자리를 내준다
-const props = defineProps<{ status: SaveStatus; savedAt?: number | null; compact?: boolean }>();
+// alert: 저장 상태보다 먼저 알려야 할 문제(폴더를 열 수 없음, 읽지 못한 파일). 있으면 "저장됨" 대신 보여 준다
+// info: 문제가 아닌 안내(폴더를 바꿨지만 옮기지 않음). 저장 실패·늦어짐이나 alert가 있으면 그쪽을 먼저 보인다 — 안내가 실패를 가리면 안 된다
+const props = defineProps<{
+  status: SaveStatus;
+  savedAt?: number | null;
+  compact?: boolean;
+  alert?: string | null;
+  alertTitle?: string;
+  info?: string | null;
+}>();
+
+const shownInfo = computed(() => (!props.alert && (props.status === "saved" || props.status === "pending") && props.info) || null);
+const message = computed(() => props.alert ?? shownInfo.value);
 
 const label = computed(
   () =>
+    message.value ??
     ({
       saved: "저장됨",
       pending: "저장 대기 중…",
       error: "저장 실패 — 다시 시도합니다",
+      slow: "저장이 늦어지고 있어요…",
     })[props.status],
 );
 
+const dot = computed(() => (props.alert ? "error" : shownInfo.value ? "info" : props.status));
+
 const time = computed(() => {
-  if (props.compact || props.status !== "saved" || !props.savedAt) return null;
+  if (message.value || props.compact || props.status !== "saved" || !props.savedAt) return null;
   const d = new Date(props.savedAt);
   return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
 });
@@ -38,13 +54,13 @@ watch(
 </script>
 
 <template>
-  <footer class="foot" :class="{ flash }">
-    <span :key="flashKey" class="dot" :class="status">
-      <svg v-if="status === 'saved'" viewBox="0 0 10 10" class="check">
+  <footer class="foot" :class="{ flash: flash && !message, alert: !!message }">
+    <span :key="flashKey" class="dot" :class="dot">
+      <svg v-if="dot === 'saved'" viewBox="0 0 10 10" class="check">
         <path d="M2.2 5.2l1.9 1.9 3.8-4.2" />
       </svg>
     </span>
-    <span class="status">{{ label }}</span>
+    <span class="status" :title="alert ? alertTitle || alert : (shownInfo ?? undefined)">{{ label }}</span>
     <span v-if="time" class="time">{{ time }}</span>
     <slot />
   </footer>
@@ -63,7 +79,18 @@ watch(
   transition: color 0.4s ease;
   white-space: nowrap;
 }
+.foot.alert {
+  color: var(--ink);
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+.foot.alert .status {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .dot {
+  flex: none;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -80,6 +107,13 @@ watch(
 }
 .dot.error {
   background: #ff453a;
+}
+.dot.slow {
+  background: #ff9f0a;
+  animation: breathe 1.2s ease-in-out infinite;
+}
+.dot.info {
+  background: #8e8e93;
 }
 .check {
   width: 0;

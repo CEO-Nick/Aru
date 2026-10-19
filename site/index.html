@@ -249,13 +249,14 @@
       <h1>모든 창 위에,<br /><em>오늘</em> 할 일.</h1>
       <p class="lede">Aru는 맥 화면 맨 위에 떠 있는 작은 할 일 창이에요. 오늘 할 일과 언젠가 할 일을 한 창에 두고, 무슨 일을 하든 시야에서 놓치지 않게 해요.</p>
       <div class="cta">
-        <a class="btn primary" href="https://github.com/CEO-Nick/Aru/releases/latest/download/Aru-mac.zip">
+        <!-- 출시 전 App Store Connect의 앱 ID로 바꾼다(아래 설치 절도) -->
+        <a class="btn primary" href="https://apps.apple.com/app/id0000000000">
           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9-1.2-1.8-3.1-2-3.7-2-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9-1.7 0-3.3 1-4.2 2.6-1.8 3.1-.5 7.7 1.3 10.2.9 1.2 1.9 2.6 3.2 2.6 1.3-.1 1.8-.8 3.3-.8 1.6 0 2 .8 3.4.8 1.4 0 2.3-1.3 3.1-2.5 1-1.4 1.4-2.8 1.4-2.9-.1 0-2.7-1-2.7-4.1zM13.9 5c.7-.9 1.2-2 1.1-3.2-1 0-2.3.7-3 1.6-.7.8-1.3 2-1.1 3.1 1.1.1 2.3-.6 3-1.5z"/></svg>
-          macOS용 다운로드
+          App Store에서 받기
         </a>
         <a class="btn ghost" href="#guide">기능 보기</a>
       </div>
-      <div class="meta">무료 · Apple Silicon 맥 · 자동 업데이트 · Windows 출시 예정</div>
+      <div class="meta">App Store 1회 결제 · Apple Silicon·Intel 맥 · 업데이트는 App Store로 · Windows 출시 예정</div>
       <img class="hero-media" src="media/write.gif?v=202610151214" alt="Aru 창에서 할 일을 추가하고 체크하는 모습" />
     </div>
     <div class="slot" id="slot" aria-hidden="true"><div class="hint"><span class="live" aria-hidden="true"></span><span><span class="up">↑</span> 진짜 Aru예요. 체크하고, 적고, 투명도를 내려 보세요</span></div></div>
@@ -282,7 +283,8 @@
       <div class="copy">
         <span class="key">AI · 명령어</span>
         <h3>AI에게 "할 일에 넣어줘"</h3>
-        <p>Claude Code, Codex 같은 AI 도구와 대화하다가 "오늘 할 일에 넣어줘"라고 하면 Aru에 바로 들어가요. AI가 넣은 할 일에는 <kbd>AI</kbd> 태그가 붙고, 태그를 누르면 내 할 일이 돼요. 방금 한꺼번에 들어온 건 창 아래에서 한 번에 되돌릴 수 있어요.</p>
+        <p>Claude Code, Codex 같은 AI 도구와 대화하다가 "오늘 할 일에 넣어줘"라고 하면 Aru에 바로 들어가요. AI가 넣은 할 일에는 <kbd>AI</kbd> 태그가 붙고, 태그를 누르면 내 할 일이 돼요. 방금 한꺼번에 들어온 건 창 아래에서 한 번에 되돌릴 수 있어요. 그 할 일 밑에 직접 단 메모가 있으면 지우지 않고 태그만 떼요.</p>
+        <p>연결은 설정의 「AI 도구에 연결」에서 해요. Claude Code·Codex는 버튼이 복사해 준 명령 한 줄을 터미널에서 실행하면 되고(열려 있었다면 다시 시작), Claude 데스크톱은 버튼을 누르면 설치 창이 떠요.</p>
         <p>AI는 직접 부탁할 때만 넣고, 지우거나 고치지는 않아요. 터미널에서 <kbd>aru add</kbd>로 넣을 수도 있어요.</p>
       </div>
       <div class="media" style="max-width:none"><img src="media/ai.gif?v=202610151214" alt="터미널의 Claude Code에 회의에서 나온 일을 할 일에 넣어 달라고 하자 Aru 창 맨 위에 AI 태그가 붙은 할 일 두 개가 들어오고, 태그를 눌러 확인하는 모습" loading="lazy" width="900" height="479" /></div>
@@ -341,7 +343,7 @@
       <div class="copy">
         <span class="key">오늘 · 언젠가</span>
         <h3>할 일은 가볍게 적고 체크</h3>
-        <p>위쪽에는 오늘 할 일, 아래쪽에는 날짜와 상관없이 언젠가 할 일을 적어요. 적고 Enter를 누르면 추가되고, 체크박스를 누르면 끝낸 일이 돼요.</p>
+        <p>위쪽에는 오늘 할 일, 아래쪽에는 날짜와 상관없이 언젠가 할 일을 적어요. 적고 Enter를 누르면 추가되고, 체크박스를 누르거나 <kbd>⌘ Enter</kbd>를 누르면 끝낸 일이 돼요.</p>
       </div>
       <div class="media"><img src="media/write.gif?v=202610151214" alt="오늘 할 일을 입력해 추가하고 체크하는 모습" loading="lazy" width="372" height="530" /></div>
     </article>
@@ -353,7 +355,7 @@
         <div class="eyebrow">Your files</div>
         <h2>할 일은<br />내 맥의 <em>텍스트</em> 파일로</h2>
         <p>서버도 계정도 없어요. 적는 대로 알아서 저장하고, 날짜마다 마크다운 파일 하나로 남겨서 Obsidian이나 메모장으로 열어도 그대로 읽혀요.</p>
-        <p>설정에서 저장 폴더를 Dropbox나 iCloud Drive로 바꾸면 다른 맥과 함께 쓸 수 있어요. 빈 폴더를 고르면 지금까지의 할 일을 가져가요.</p>
+        <p>설정에서 저장 폴더를 Dropbox나 iCloud Drive로 바꾸면 다른 맥과 함께 쓸 수 있어요. 빈 폴더를 고르면 지금까지의 할 일을 가져가고, 이미 할 일이 있는 폴더면 그 폴더의 할 일을 써요(이전 폴더의 할 일은 그대로 남아요). 고른 폴더를 열 수 없게 되면 다른 곳에 몰래 저장하지 않고 창 아래에 알려요. 다른 편집기에서 적은 제목·메모는 그대로 두고, AI가 같은 파일에 동시에 써도 서로 덮어쓰지 않고 합쳐요.</p>
       </div>
       <pre class="reveal" aria-label="저장 폴더 구조 예시"><span class="dim">저장 폴더/   설정 → Finder에서 열기</span>
 ├── daily/
@@ -375,15 +377,15 @@
       <div class="eyebrow">Install</div>
       <h2>지금 띄워 보세요</h2>
       <ol class="steps">
-        <li><span><b>내려받아요.</b> 압축 파일을 풀면 Aru.app이 나와요.</span></li>
-        <li><span><b>응용 프로그램 폴더로 옮겨요.</b> Launchpad나 Spotlight에서 "Aru"로 찾을 수 있어요.</span></li>
-        <li><span><b>처음 한 번은 우클릭 → 열기.</b> 개인이 만든 앱이라 Apple 인증서가 없어서, 처음 열 때만 확인 창이 떠요. "열기"를 누르면 다음부터는 바로 열려요.</span></li>
+        <li><span><b>App Store에서 받아요.</b> 한 번 결제하면 끝이고, 업데이트도 App Store가 알아서 해요.</span></li>
+        <li><span><b>Launchpad나 Spotlight에서 "Aru"를 열어요.</b> 창을 닫아도 메뉴 막대·Dock 아이콘으로 다시 열고, 어느 앱에서든 ⌥Space로 바로 적어요.</span></li>
+        <li><span><b>예전에 직접 내려받은 Aru(0.2.8)를 썼다면</b> 설정 → 폴더 변경에서 <code>~/Library/Application Support/dev.aruu.aru</code>를 고르세요. 이미 할 일이 있는 폴더라 그 할 일을 그대로 써요.</span></li>
       </ol>
       <div class="cta">
-        <a class="btn primary" href="https://github.com/CEO-Nick/Aru/releases/latest/download/Aru-mac.zip">macOS용 다운로드</a>
+        <a class="btn primary" href="https://apps.apple.com/app/id0000000000">App Store에서 받기</a>
         <a class="btn ghost" href="https://github.com/CEO-Nick/Aru">소스 코드</a>
       </div>
-      <div class="meta">Apple Silicon 맥 · 무료 · Windows 버전은 준비 중이에요</div>
+      <div class="meta">Apple Silicon·Intel 맥 · App Store 1회 결제 · Windows 버전은 준비 중이에요</div>
       <div class="meta">버그나 바라는 기능은 <a href="https://tally.so/r/laDqkN" style="color:inherit;text-decoration:underline">의견 보내기</a>로 알려 주세요</div>
     </div>
   </section>

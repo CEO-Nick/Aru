@@ -18,20 +18,22 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tauri-plugin-window-state = "2"
 tauri-plugin-dialog = "2"
-tauri-plugin-single-instance = "2"
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-updater = "2"
-ed25519-dalek = { version = "2", default-features = false, features = ["std"] }
 base64 = "0.22"
+crc32fast = "1"
+libc = "0.2"
+sha2 = "0.10"
 
 [target.'cfg(target_os = "macos")'.dependencies]
-objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSResponder", "NSWorkspace", "NSRunningApplication"] }
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSResponder", "NSWorkspace", "NSRunningApplication", "NSButton", "NSControl", "NSView"] }
+objc2-foundation = { version = "0.3", features = ["NSURL", "NSData", "NSString", "NSError", "NSArray", "NSPathUtilities", "NSProcessInfo"] }
 
 
 # Read the optimization guideline for more details: https://tauri.app/concept/size/#cargo-configuration

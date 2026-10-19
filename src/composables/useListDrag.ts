@@ -12,6 +12,8 @@ export interface DropMarker {
 export interface DragOptions {
   /** 달력 날짜 칸([data-drop-date])에 놓았을 때. 없으면 날짜 칸은 놓을 곳이 아니다 */
   onDropToDate?: (sourceKey: string, id: string, date: string) => void;
+  /** 이 목록에 놓을 수 있는가. 읽지 못한 파일의 목록에 놓으면 저장되지 않아 할 일이 사라진다 */
+  canDropTo?: (listKey: string) => boolean;
 }
 
 /**
@@ -32,6 +34,7 @@ export function useListDrag(lists: Record<string, Ref<TodoItem[]>>, options: Dra
     if (!listEl && dateEl) return { listKey: "", beforeId: null, date: dateEl.dataset.dropDate! };
     if (!listEl) return null;
     const listKey = listEl.dataset.list!;
+    if (options.canDropTo && !options.canDropTo(listKey)) return null;
     const rows = [...listEl.querySelectorAll<HTMLElement>(".item[data-item-id]")];
     const before = rows.find((row) => {
       const rect = row.getBoundingClientRect();

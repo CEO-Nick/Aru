@@ -48,3 +48,20 @@ describe("parseSettings: 끝낸 일 아래로 보내기", () => {
     expect(parseSettings('{"sortChecked": "no"}').sortChecked).toBe(true);
   });
 });
+
+describe("UI-15: 마지막 자정 처리 날짜 검사", () => {
+  it("달력에 없는 날짜나 터무니없이 먼 날짜는 기록이 없는 것으로 본다", () => {
+    for (const bad of ["0000-00-00", "2026-13-45", "2026-02-30", "0001-01-01"]) {
+      expect(parseSettings(JSON.stringify({ lastRolloverDate: bad })).lastRolloverDate).toBeNull();
+    }
+    expect(parseSettings('{"lastRolloverDate":"2026-10-14"}').lastRolloverDate).toBe("2026-10-14");
+  });
+});
+
+describe("rolloverPending (QA10 R10-9)", () => {
+  it("날짜 목록만 받아 정렬·중복 제거하고, 비었으면 두지 않는다", () => {
+    expect(parseSettings('{"rolloverPending":["2026-10-12","2026-10-11","2026-10-12","x",3]}').rolloverPending).toEqual(["2026-10-11", "2026-10-12"]);
+    expect("rolloverPending" in parseSettings('{"rolloverPending":[]}')).toBe(false);
+    expect("rolloverPending" in parseSettings('{"rolloverPending":"2026-10-11"}')).toBe(false);
+  });
+});

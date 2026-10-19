@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { addDays } from "../core/date";
+import { addDays, MAX_DATE, MIN_DATE } from "../core/date";
 import { dateLabel } from "../core/format";
 
 const props = defineProps<{ date: string; today: string }>();
@@ -15,11 +15,11 @@ const tag = computed(() => {
 
 <template>
   <div class="datebar">
-    <button class="nav" aria-label="이전 날" @click="emit('update:date', addDays(date, -1))">◀</button>
+    <button class="nav" aria-label="이전 날" :disabled="date <= MIN_DATE" @click="emit('update:date', addDays(date, -1))">◀</button>
     <button class="date" title="달력 열기" @click="emit('open-calendar')">{{ dateLabel(date) }}</button>
     <span v-if="tag" class="tag" :class="tag.cls">{{ tag.text }}</span>
     <span class="spacer"></span>
-    <button class="nav" aria-label="다음 날" @click="emit('update:date', addDays(date, 1))">▶</button>
+    <button class="nav" aria-label="다음 날" :disabled="date >= MAX_DATE" @click="emit('update:date', addDays(date, 1))">▶</button>
     <button class="today-btn" :class="{ hot: !!tag }" @click="emit('update:date', today)">오늘</button>
   </div>
 </template>
@@ -51,6 +51,11 @@ button {
 .nav:hover,
 .date:hover {
   background: var(--hover);
+}
+.nav:disabled {
+  opacity: 0.3;
+  background: none;
+  cursor: default;
 }
 .date {
   flex: none;

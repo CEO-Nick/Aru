@@ -1,43 +1,22 @@
 <script setup lang="ts">
-import { computed } from "vue";
-import { noteLines, useUpdate } from "../composables/useUpdate";
+import { getVersion } from "@tauri-apps/api/app";
+import { ref } from "vue";
 import { openFeedback } from "../platform/feedback";
-import UpdateButton from "./UpdateButton.vue";
 
-const { state, check } = useUpdate();
-
-const lines = computed(() => (state.available ? noteLines(state.available.notes) : []));
-
-const note = computed(
-  () =>
-    ({
-      idle: null,
-      checking: null,
-      latest: "최신 버전이에요",
-      failed: "확인하지 못했어요. 인터넷 연결을 확인해 주세요",
-    })[state.check],
+// 앱스토어판은 업데이트를 앱스토어가 맡아서 버전만 보여 준다
+const version = ref("");
+// 버전을 못 읽으면 이름만 보인다
+getVersion().then(
+  (v) => (version.value = v),
+  () => {},
 );
 </script>
 
 <template>
   <div class="about">
     <div class="row">
-      <span class="version">Aru {{ state.current ?? "" }}</span>
-      <UpdateButton v-if="state.available" />
-      <button
-        v-else
-        class="btn"
-        data-action="check-update"
-        :disabled="state.check === 'checking'"
-        @click="check"
-      >
-        {{ state.check === "checking" ? "확인 중…" : "업데이트 확인" }}
-      </button>
+      <span class="version">Aru {{ version }}</span>
     </div>
-    <ul v-if="lines.length" class="notes">
-      <li v-for="line in lines" :key="line">{{ line }}</li>
-    </ul>
-    <p v-if="note" class="note">{{ note }}</p>
     <div class="row feedback">
       <span class="hint">불편하거나 바라는 게 있나요?</span>
       <button class="btn" data-action="feedback" @click="openFeedback">의견 보내기</button>

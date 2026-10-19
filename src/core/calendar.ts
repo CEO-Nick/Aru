@@ -1,4 +1,4 @@
-import { addDays, toIsoDate } from "./date";
+import { addDays, MAX_DATE, toIsoDate } from "./date";
 import type { TodoItem } from "./todoList";
 
 /** month는 "YYYY-MM" */
@@ -10,9 +10,12 @@ export function monthGrid(month: string): string[] {
   const start = addDays(toIsoDate(first), -mondayOffset);
   const sundayOffset = (7 - last.getDay()) % 7;
   const end = addDays(toIsoDate(last), sundayOffset);
+  // 문자열로 비교하면 10000년이 9999년보다 앞선다. 끝 칸이나 날짜 범위의 끝에서 멈춘다
   const days: string[] = [];
-  for (let d = start; d <= end; d = addDays(d, 1)) days.push(d);
-  return days;
+  for (let d = start; ; d = addDays(d, 1)) {
+    days.push(d);
+    if (d === end || d === MAX_DATE) return days;
+  }
 }
 
 export function addMonths(month: string, delta: number): string {

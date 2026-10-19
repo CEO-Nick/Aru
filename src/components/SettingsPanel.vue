@@ -1,7 +1,15 @@
 <script setup lang="ts">
 import type { CarryOver } from "../core/settings";
 
-defineProps<{ carryOver: CarryOver; sortChecked: boolean; allowExternalAdd: boolean; dataRoot: string }>();
+const props = defineProps<{
+  carryOver: CarryOver;
+  sortChecked: boolean;
+  allowExternalAdd: boolean;
+  /** 저장 폴더 전체 경로 */
+  dataRoot: string;
+  /** 보여 줄 짧은 이름. 없으면 전체 경로 */
+  dataRootLabel?: string;
+}>();
 const emit = defineEmits<{
   "update:carryOver": [value: CarryOver];
   "update:sortChecked": [value: boolean];
@@ -16,6 +24,15 @@ const OPTIONS: { value: CarryOver; title: string; hint: string }[] = [
   { value: "next-day", title: "다음 날로 옮기기", hint: "미리 적어 둔 항목 아래에 붙는다." },
   { value: "someday", title: "언젠가로 옮기기", hint: "아래 목록 맨 끝에 붙는다." },
 ];
+
+// 운영체제 라디오처럼 화살표로 고르고(끝에서 처음으로 돈다) 고른 칸으로 포커스를 옮긴다. Tab은 고른 칸 하나에만 멈춘다
+function moveChoice(event: KeyboardEvent, step: number) {
+  const i = OPTIONS.findIndex((o) => o.value === props.carryOver);
+  const next = (i + step + OPTIONS.length) % OPTIONS.length;
+  emit("update:carryOver", OPTIONS[next].value);
+  const radios = (event.currentTarget as HTMLElement).parentElement?.querySelectorAll<HTMLElement>('[role="radio"]');
+  radios?.[next]?.focus();
+}
 </script>
 
 <template>
@@ -33,8 +50,15 @@ const OPTIONS: { value: CarryOver; title: string; hint: string }[] = [
         class="radio"
         role="radio"
         :aria-checked="carryOver === option.value"
+        :tabindex="carryOver === option.value ? 0 : -1"
         :class="{ on: carryOver === option.value }"
         @click="emit('update:carryOver', option.value)"
+        @keydown.space.prevent="emit('update:carryOver', option.value)"
+        @keydown.enter.prevent="emit('update:carryOver', option.value)"
+        @keydown.up.prevent="moveChoice($event, -1)"
+        @keydown.left.prevent="moveChoice($event, -1)"
+        @keydown.down.prevent="moveChoice($event, 1)"
+        @keydown.right.prevent="moveChoice($event, 1)"
       >
         <span class="rb"></span>
         <span>
@@ -81,18 +105,20 @@ const OPTIONS: { value: CarryOver; title: string; hint: string }[] = [
       </span>
       <span class="switch" :class="{ on: allowExternalAdd }"><i></i></span>
     </div>
+    <slot name="ai" />
 
     <hr />
 
     <h4>저장 폴더</h4>
-    <div class="path">{{ dataRoot }}</div>
+    <div class="path" :title="dataRoot">{{ dataRootLabel || dataRoot }}</div>
     <div class="buttons">
       <button class="btn" data-action="change-folder" @click="emit('change-folder')">폴더 변경…</button>
       <button class="btn" data-action="reveal-folder" @click="emit('reveal-folder')">Finder에서 열기</button>
     </div>
     <p class="note">
       날짜별 마크다운 파일로 저장된다. OneDrive, Dropbox, Obsidian 볼트 폴더를 고르면 다른 컴퓨터와
-      함께 쓸 수 있다. 빈 폴더를 고르면 지금까지의 할 일을 복사해 간다.
+      함께 쓸 수 있다. 빈 폴더를 고르면 지금까지의 할 일을 복사해 가고, 이미 할 일이 있는 폴더를 고르면 그 폴더의
+      할 일을 쓴다(지금 폴더의 할 일은 그대로 남는다).
     </p>
   </div>
 </template>
@@ -135,6 +161,10 @@ h4 {
 }
 .radio:hover {
   background: rgba(255, 255, 255, 0.05);
+}
+.radio:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .radio b {
   display: block;

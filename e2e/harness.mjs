@@ -20,17 +20,22 @@ export async function startServer() {
 
 export async function openApp(
   browser,
-  { files = {}, now = "2026-10-14T10:00:00", hash = "", viewport = { width: 320, height: 470 }, pendingUpdate = null, storage = {}, license = { state: "disabled" } } = {},
+  { files = {}, now = "2026-10-14T10:00:00", hash = "", viewport = { width: 320, height: 470 }, storage = {}, session = {}, globals = {}, rootUnavailable = false } = {},
 ) {
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
   await page.clock.install({ time: new Date(now) });
   await page.addInitScript(`window.__initialFiles = ${JSON.stringify(files)};`);
-  await page.addInitScript(`window.__pendingUpdate = ${JSON.stringify(pendingUpdate)};`);
-  await page.addInitScript(`window.__license = ${JSON.stringify(license)};`);
   await page.addInitScript(
     `for (const [k, v] of Object.entries(${JSON.stringify(storage)})) localStorage.setItem(k, v);`,
   );
+  // 창이 새로고침되기 전에 남겨 둔 값(폴더를 바꾼 뒤의 안내 등). 처음 열 때만 넣는다
+  await page.addInitScript(
+    `if (!sessionStorage.getItem("__e2eSession")) { sessionStorage.setItem("__e2eSession", "1"); for (const [k, v] of Object.entries(${JSON.stringify(session)})) sessionStorage.setItem(k, v); }`,
+  );
+  // 장애 주입용 전역값(__badReads·__readDelay 등). 모의 백엔드가 호출 때마다 읽는다
+  await page.addInitScript(`Object.assign(window, ${JSON.stringify(globals)});`);
+  if (rootUnavailable) await page.addInitScript(`sessionStorage.getItem("__rootUnavailable") ?? sessionStorage.setItem("__rootUnavailable", "1");`);
   await page.addInitScript(mockScript);
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
@@ -43,6 +48,33 @@ export async function openApp(
 
 export const fs = (page) => page.evaluate(() => window.__mockFs);
 export const writes = (page) => page.evaluate(() => window.__writes);
+export const calls = (page, name) =>
+  page.evaluate((n) => window.__calls.filter(([c]) => c === n).map(([, a]) => a), name);
+export const status = async (page) => (await page.locator(".foot .status").textContent()).trim();
+/** 앱을 다시 켠다(새로고침). 파일은 sessionStorage에 남는다 */
+export async function reload(page) {
+  await page.reload();
+  await page.waitForSelector(".foot");
+  await page.clock.runFor(10);
+}
+/** 클립보드 붙여넣기를 흉내 낸다 */
+export const paste = (locator, text) =>
+  locator.evaluate((node, t) => {
+    const dt = new DataTransfer();
+    dt.setData("text/plain", t);
+    node.dispatchEvent(new ClipboardEvent("paste", { clipboardData: dt, bubbles: true, cancelable: true }));
+  }, text);
+/** 지금 커서가 있는 칸의 offset 위치로 커서를 보낸다 */
+export const setCaret = (page, offset) =>
+  page.evaluate((o) => {
+    const el = document.activeElement;
+    const r = document.createRange();
+    r.setStart(el.firstChild ?? el, o);
+    r.collapse(true);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  }, offset);
+
 export const texts = (page, list) =>
   page.$$eval(`[data-list="${list}"] .item .text`, (els) => els.map((e) => e.textContent));
 

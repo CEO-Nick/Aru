@@ -5,7 +5,7 @@ export interface TodoItem extends TodoLine {
 }
 
 // AI가 넣은 할 일은 사용자가 손대는 순간 사용자 것이 된다
-function withoutAi({ ai: _ai, ...item }: TodoItem): TodoItem {
+export function withoutAi({ ai: _ai, ...item }: TodoItem): TodoItem {
   return item;
 }
 
@@ -25,9 +25,13 @@ export function acceptAi(list: TodoItem[], id: string): TodoItem[] {
   return list.map((item) => (item.id === id ? withoutAi(item) : item));
 }
 
-/** 한 번에 넣은 AI 할 일 묶음 중 아직 손대지 않은 것을 지운다 */
+/**
+ * 한 번에 넣은 AI 할 일 묶음 중 아직 손대지 않은 것을 지운다.
+ * 하위 줄이 붙은 항목은 지우지 않고 AI 표시만 뗀다 — aru 명령은 하위 줄을 쓰지 않으므로 그 줄은 사용자가 단 메모다
+ */
 export function removeAiBatch(list: TodoItem[], batch: { by: string; at: number }): TodoItem[] {
-  return list.filter((item) => item.ai?.by !== batch.by || item.ai?.at !== batch.at);
+  const inBatch = (item: TodoItem) => item.ai?.by === batch.by && item.ai?.at === batch.at;
+  return list.filter((item) => !inBatch(item) || item.children?.length).map((item) => (inBatch(item) ? withoutAi(item) : item));
 }
 
 /** afterId가 null이면 맨 끝에 붙인다 */

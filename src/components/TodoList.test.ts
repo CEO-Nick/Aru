@@ -335,6 +335,32 @@ describe("TodoList", () => {
     expect(caretOffset(merged)).toBe("전자고지서 스테이지 ".length);
   });
 
+  it("보이지 않는 글자만 있는(빈 칸으로 보이는) 위 할 일과 합치면 빈 칸처럼 다룬다 — 앞에 그 글자와 띄어쓰기가 붙지 않는다 (QA5-07)", async () => {
+    const wrapper = mountList([
+      { id: "a", text: "\u200b", done: false },
+      { id: "b", text: "다음", done: false },
+    ]);
+    const text = wrapper.findAll(".item .text")[1];
+    placeCaret(text.element, 0);
+    await text.trigger("keydown", { key: "Backspace" });
+    await wrapper.vm.$nextTick();
+    expect(current(wrapper).map((t) => t.text)).toEqual(["다음"]);
+    expect(caretOffset(wrapper.find(".item .text").element)).toBe(0);
+  });
+
+  it("빈 칸처럼 보이는 할 일의 맨 앞에서 Backspace를 누르면 빈 할 일을 지운 것처럼 위 할 일만 남는다 (QA6-03)", async () => {
+    const wrapper = mountList([
+      { id: "a", text: "위", done: false },
+      { id: "b", text: "\u3164", done: false },
+      { id: "c", text: "아래", done: false },
+    ]);
+    const text = wrapper.findAll(".item .text")[1];
+    placeCaret(text.element, 0);
+    await text.trigger("keydown", { key: "Backspace" });
+    await wrapper.vm.$nextTick();
+    expect(current(wrapper).map((t) => t.text)).toEqual(["위", "아래"]);
+  });
+
   describe("끝낸 일 아래로 보내기", () => {
     const list = () => [
       { id: "a", text: "하나", done: false },
@@ -385,5 +411,60 @@ describe("TodoList", () => {
       expect(order(wrapper)).toEqual(["a", "b", "x"]);
       vi.useRealTimers();
     });
+  });
+
+  // UI-03: 줄바꿈 계열 글자·NBSP는 입력 단계에서 일반 공백으로 바꾼다(파일 쓰기 전에도 화면 목록·중복 비교가 같은 글자를 보게)
+  describe("입력 글자 정리", () => {
+    it("항목에 친 NBSP는 목록에는 일반 공백으로 들어가고 칸 글자는 그대로 둔다(커서가 튀지 않게)", async () => {
+      const wrapper = mountList([{ id: "a", text: "a", done: false }]);
+      const text = wrapper.find(".item .text");
+      text.element.textContent = "a\u00a0 b\u00a0";
+      await text.trigger("input");
+      expect(current(wrapper)[0].text).toBe("a  b ");
+      expect(text.element.textContent).toBe("a\u00a0 b\u00a0");
+    });
+
+    it("항목에 들어온 U+2028·U+2029는 공백이 되고 칸 글자도 한 줄로 고친다", async () => {
+      const wrapper = mountList([{ id: "a", text: "", done: false }]);
+      const text = wrapper.find(".item .text");
+      text.element.textContent = "회의\u2028자료\u2029정리";
+      await text.trigger("input");
+      expect(current(wrapper)[0].text).toBe("회의 자료 정리");
+      expect(text.element.textContent).toBe("회의 자료 정리");
+    });
+
+    it("입력칸에 붙여 넣은 U+2028·NBSP도 한 줄 할 일로 들어간다", async () => {
+      const wrapper = mountList([]);
+      const input = wrapper.find(".add input");
+      await input.setValue("복사한\u2028글\u00a0끝");
+      await input.trigger("keydown", { key: "Enter" });
+      expect(current(wrapper).map((t) => t.text)).toEqual(["복사한 글 끝"]);
+    });
+  });
+});
+
+describe("입력칸 글 안전망 (QA10 R10-1~3)", () => {
+  it("draft-slot을 주면 입력칸 글을 남기고, 새로 만들 때 되돌린다. 넣으면 지운다", async () => {
+    localStorage.clear();
+    const first = mountList([], { draftSlot: "main.someday" });
+    await first.find(".add input").setValue("쓰다만");
+    expect(localStorage.getItem("aru.draft.main.someday")).toBe("쓰다만");
+    first.unmount();
+    const second = mountList([], { draftSlot: "main.someday" });
+    expect((second.find(".add input").element as HTMLInputElement).value).toBe("쓰다만");
+    await second.find(".add input").trigger("keydown", { key: "Enter" });
+    expect(current(second).map((i) => i.text)).toEqual(["쓰다만"]);
+    expect(localStorage.getItem("aru.draft.main.someday")).toBeNull();
+    second.unmount();
+  });
+
+  it("막힌 목록이어도 되돌린 글은 들고 있다가 풀리면 보인다", async () => {
+    localStorage.clear();
+    localStorage.setItem("aru.draft.main.today", "남은글");
+    const wrapper = mountList([], { draftSlot: "main.today", blocked: "읽지 못한 파일이라 고칠 수 없어요" });
+    expect(wrapper.find(".add input").exists()).toBe(false);
+    await wrapper.setProps({ blocked: null });
+    expect((wrapper.find(".add input").element as HTMLInputElement).value).toBe("남은글");
+    wrapper.unmount();
   });
 });

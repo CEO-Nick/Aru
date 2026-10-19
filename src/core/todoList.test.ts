@@ -143,3 +143,16 @@ describe("AI가 넣은 할 일", () => {
     expect(removeAiBatch([fromAi, mine, other, sibling], ai)).toEqual([mine, other]);
   });
 });
+
+describe("removeAiBatch: 하위 줄이 있는 AI 할 일 (QA3-04)", () => {
+  it("aru 명령은 하위 줄을 쓰지 않는다. 하위 줄이 붙어 있으면 사용자가 단 것이라 항목을 남기고 AI 표시만 뗀다", () => {
+    const ai = { by: "codex", at: 100 };
+    const withNote: TodoItem = { id: "n", text: "기획서", done: false, ai, children: ["  - 내가 단 메모"] };
+    const plain: TodoItem = { id: "p", text: "회의", done: false, ai };
+    const mine: TodoItem = { id: "m", text: "장보기", done: false };
+    expect(removeAiBatch([withNote, plain, mine], ai)).toEqual([
+      { id: "n", text: "기획서", done: false, children: ["  - 내가 단 메모"] },
+      mine,
+    ]);
+  });
+});
