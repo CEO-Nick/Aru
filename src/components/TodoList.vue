@@ -30,6 +30,9 @@ const props = defineProps<{
   blocked?: string | null;
   /** 입력칸 글을 이 맥에 남겨 둘 자리(창.목록). 주면 새로 만들 때 그 글을 되돌린다 */
   draftSlot?: string;
+  /** 맨 위에서 ↑, 입력칸에서 ↓를 누르면 옮겨 갈 이웃 목록. 주지 않으면 그 자리에 머문다 */
+  leaveUp?: () => void;
+  leaveDown?: () => void;
 }>();
 const cannotAdd = computed(() => !!props.blocked);
 const emit = defineEmits<{ "drag-start": [id: string, event: PointerEvent] }>();
@@ -134,7 +137,12 @@ function onArrow(event: KeyboardEvent, item: TodoItem | null) {
   const index = item ? items.value.findIndex((t) => t.id === item.id) : items.value.length;
   if (event.key === "ArrowUp") {
     const el = item ? textOf(item.id) : undefined;
-    if ((el && !caretOnEdgeLine(el, "first")) || index === 0) return;
+    if (el && !caretOnEdgeLine(el, "first")) return;
+    if (index === 0) {
+      if (!props.leaveUp) return;
+      event.preventDefault();
+      return props.leaveUp();
+    }
     event.preventDefault();
     focusItem(items.value[index - 1].id);
   } else if (item) {
@@ -218,6 +226,10 @@ function insertAtCaret(el: HTMLElement, text: string) {
 
 async function onAddKeydown(event: KeyboardEvent) {
   if (event.key === "ArrowUp") return onArrow(event, null);
+  if (event.key === "ArrowDown" && props.leaveDown) {
+    event.preventDefault();
+    return props.leaveDown();
+  }
   // 빈 입력칸에서 Backspace는 위 할 일로 올라간다. 위 할 일의 글자는 지우지 않는다
   if (event.key === "Backspace" && draft.value === "" && items.value.length) {
     event.preventDefault();
@@ -270,7 +282,17 @@ function takeDraft(): string {
   return text;
 }
 
-defineExpose({ commitDraft, add, addNew, takeDraft });
+// 위 목록에서 내려오면 첫 할 일로, 아래 목록에서 올라오면 입력칸으로. 막힌 목록은 입력칸이 없으니 할 일로 간다
+function enterFromAbove() {
+  if (items.value.length) return focusItem(items.value[0].id);
+  focusAddInput();
+}
+function enterFromBelow() {
+  if (!cannotAdd.value) return focusAddInput();
+  if (items.value.length) focusItem(items.value[items.value.length - 1].id);
+}
+
+defineExpose({ commitDraft, add, addNew, takeDraft, enterFromAbove, enterFromBelow });
 
 function onItemKeydown(event: KeyboardEvent, item: TodoItem) {
   if (event.key === "ArrowUp" || event.key === "ArrowDown") {
