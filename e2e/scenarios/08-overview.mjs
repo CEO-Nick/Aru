@@ -75,15 +75,35 @@ export default async function (browser) {
     await context.close();
   });
 
-  await scenario("'작은 창에서 보기'는 고른 날짜를 작은 창에 보내고, 작은 창은 그 날짜로 이동한다", async () => {
+  await scenario("'작은 창에서 보기'는 고른 날짜를 작은 창에 보내고 모아보기를 닫는다, 작은 창은 그 날짜로 이동한다", async () => {
     const big = await openApp(browser, BIG);
     await big.page.locator('.cell[data-date="2026-10-16"]').click();
+    await big.page.clock.runFor(10);
+    await big.page.locator('[data-list="overview"] .add input').fill("쓰다 만 글");
     await big.page.locator(".show-main").click();
-    const sent = await big.page.evaluate(() =>
-      window.__calls.filter(([c]) => c === "plugin:event|emit").map(([, a]) => [a.event, a.payload]),
-    );
+    await big.page.clock.runFor(10);
+    const calls = await big.page.evaluate(() => window.__calls.map(([c, a]) => [c, a]));
+    const sent = calls.filter(([c]) => c === "plugin:event|emit").map(([, a]) => [a.event, a.payload]);
     assert.deepEqual(sent, [["show-date", "2026-10-16"]]);
+    // 입력칸 글을 저장한 뒤에 넘기고, 넘긴 뒤에 닫는다
+    const saved = calls.findIndex(([c, a]) => c === "write_text" && a.path === "daily/2026-10-16.md");
+    const emitted = calls.findIndex(([c]) => c === "plugin:event|emit");
+    const closed = calls.findIndex(([c]) => c === "plugin:window|destroy");
+    assert.ok(saved >= 0 && saved < emitted && emitted < closed, JSON.stringify({ saved, emitted, closed }));
+    assert.equal((await fs(big.page))["daily/2026-10-16.md"], "- [ ] 쓰다 만 글\n");
     await big.context.close();
+
+    const failing = await openApp(browser, BIG);
+    await failing.page.locator('.cell[data-date="2026-10-16"]').click();
+    await failing.page.clock.runFor(10);
+    await failing.page.evaluate(() => (window.__failWrites = true));
+    await failing.page.locator('[data-list="overview"] .add input').fill("못 쓴 글");
+    await failing.page.locator(".show-main").click();
+    await failing.page.clock.runFor(10);
+    const failCalls = await failing.page.evaluate(() => window.__calls.map(([c]) => c));
+    assert.ok(failCalls.includes("plugin:event|emit"), "날짜는 넘긴다");
+    assert.ok(!failCalls.includes("plugin:window|destroy"), "저장하지 못했으면 모아보기를 닫지 않는다");
+    await failing.context.close();
 
     const small = await openApp(browser, { files: { "daily/2026-10-16.md": "- [ ] 치과\n" } });
     await small.page.evaluate(() => window.__emit("show-date", "2026-10-16"));

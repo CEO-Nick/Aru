@@ -38,6 +38,17 @@ function commitDrafts() {
 }
 const { status: saveStatus, savedAt, saveNow } = useSaveIndicator(saver, commitDrafts);
 
+/**
+ * 그 날짜를 작은 창에 넘기고 이 창은 닫는다. 입력칸 글은 넘기기 전에 저장한다.
+ * 저장하지 못했으면 닫지 않는다 — 닫으면 아직 못 쓴 편집과 실패 알림이 창과 함께 사라진다.
+ * close()가 아니라 destroy()인 것은 권한(capabilities)이 destroy만 열어 두어서다. 저장은 위에서 이미 했다
+ */
+async function handOffToMain(date: string) {
+  await saveNow();
+  await showDateInMain(date);
+  if (saveStatus.value === "saved") await getCurrentWindow().destroy();
+}
+
 // 설정은 작은 창이 바꾼다. 여기서는 읽기만 하고 바뀌면 다시 읽는다
 const {
   settings,
@@ -333,7 +344,7 @@ onMounted(async () => {
           <button data-action="repick-folder" @click="health.repick(() => saver.flush())">폴더 다시 고르기</button>
           <button data-action="default-folder" @click="health.useDefault()">기본 폴더 쓰기</button>
         </span>
-        <button class="show-main" @click="showDateInMain(selected)">작은 창에서 보기</button>
+        <button class="show-main" @click="handOffToMain(selected)">작은 창에서 보기</button>
       </SaveStatusBar>
     </aside>
   </div>
