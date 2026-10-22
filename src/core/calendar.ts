@@ -6,10 +6,8 @@ export function monthGrid(month: string): string[] {
   const [y, m] = month.split("-").map(Number);
   const first = new Date(y, m - 1, 1);
   const last = new Date(y, m, 0);
-  const mondayOffset = (first.getDay() + 6) % 7;
-  const start = addDays(toIsoDate(first), -mondayOffset);
-  const sundayOffset = (7 - last.getDay()) % 7;
-  const end = addDays(toIsoDate(last), sundayOffset);
+  const start = addDays(toIsoDate(first), -first.getDay());
+  const end = addDays(toIsoDate(last), 6 - last.getDay());
   // 문자열로 비교하면 10000년이 9999년보다 앞선다. 끝 칸이나 날짜 범위의 끝에서 멈춘다
   const days: string[] = [];
   for (let d = start; ; d = addDays(d, 1)) {

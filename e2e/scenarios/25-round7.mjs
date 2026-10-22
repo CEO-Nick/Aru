@@ -628,7 +628,7 @@ export default async function (browser) {
     assert.equal(await page.locator('button[aria-label="다음 달"]').isDisabled(), true);
     const dates = await page.locator(".cell").evaluateAll((cells) => cells.map((c) => c.dataset.date));
     assert.equal(dates.at(-1), "9999-12-31");
-    assert.equal(dates.length, 33);
+    assert.equal(dates.length, 34);
     const jan = await openApp(browser, { ...BIG, hash: "#overview?date=1970-01-01", files: {} });
     await jan.page.clock.runFor(300);
     assert.equal(await jan.page.locator('button[aria-label="이전 달"]').isDisabled(), true);

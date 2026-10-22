@@ -16,6 +16,8 @@ export default async function (browser) {
       },
     });
     assert.equal(await page.locator(".month").textContent(), "2026년 10월");
+    assert.deepEqual(await page.$$eval(".grid .dow", (els) => els.map((e) => e.textContent.trim())), ["일", "월", "화", "수", "목", "금", "토"]);
+    assert.equal(await page.locator(".grid .cell").first().getAttribute("data-date"), "2026-09-27");
     assert.deepEqual(await cellTexts(page, "2026-10-12"), ["주간 회의", "PR 리뷰", "메일 정리"]);
     assert.equal((await page.locator('.cell[data-date="2026-10-12"] .more').textContent()).trim(), "+2");
     assert.deepEqual(await cellTexts(page, "2026-10-16"), ["치과 예약"]);

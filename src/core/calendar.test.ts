@@ -4,16 +4,17 @@ import { addMonths, monthGrid, monthLabel, monthSummary } from "./calendar";
 describe("monthGrid", () => {
   it("9999년 12월도 칸을 채우고, 9999-12-31 뒤(10000년) 칸은 만들지 않는다 (QA7 BD4)", () => {
     const grid = monthGrid("9999-12");
-    expect(grid[0]).toBe("9999-11-29");
+    expect(grid[0]).toBe("9999-11-28");
     expect(grid.at(-1)).toBe("9999-12-31");
-    expect(grid).toHaveLength(33);
+    expect(grid).toHaveLength(34);
   });
 
-  it("월요일부터 시작하는 주 단위 칸을 만든다 (앞뒤 달 날짜 포함)", () => {
+  it("일요일부터 토요일까지 주 단위 칸을 만든다 (앞뒤 달 날짜 포함)", () => {
     const grid = monthGrid("2026-10");
-    expect(grid[0]).toBe("2026-09-28");
-    expect(grid.at(-1)).toBe("2026-11-01");
+    expect(grid[0]).toBe("2026-09-27");
+    expect(grid.at(-1)).toBe("2026-10-31");
     expect(grid).toHaveLength(35);
+    expect(new Date(`${grid[0]}T00:00`).getDay()).toBe(0);
   });
 
   it("6주가 필요한 달은 42칸이다", () => {

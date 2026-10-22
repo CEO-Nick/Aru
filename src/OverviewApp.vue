@@ -25,7 +25,7 @@ import { onQuitRequested, readyToQuit } from "./platform/lifecycle";
 import { tauriStore } from "./platform/tauriStore";
 
 const MAX_IN_CELL = 3;
-const WEEKDAYS = ["월", "화", "수", "목", "금", "토", "일"];
+const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
 const health = useStorageHealth();
 const store = health.guard(tauriStore);

@@ -264,7 +264,7 @@ export default async function (browser) {
 
   await scenario("B23 모아보기 창에서 다른 달 날짜를 고른 뒤 '오늘'을 누르면 오른쪽 목록도 오늘로 돌아와야 한다", async () => {
     const { page, context } = await openApp(browser, { ...BIG, files: { [TODAY]: "- [ ] 오늘 일\n" } });
-    await page.locator('.cell[data-date="2026-11-01"]').click();
+    await page.locator('.cell[data-date="2026-09-27"]').click();
     await page.clock.runFor(10);
     await page.locator(".pill").click();
     await page.clock.runFor(10);
