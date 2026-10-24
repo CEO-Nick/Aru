@@ -165,4 +165,16 @@ todo,to-do,checklist,tasks,floating,always on top,productivity,markdown,calendar
 
 ## 7. 빌드 올리기
 
+서명 준비(2026-10-24 완료, 만료 2027-10-24). 비밀값은 저장소 밖 `~/.aru-signing/`에만 둔다.
+
+| 항목 | 값 |
+|---|---|
+| 팀 ID | `TGN2H82M56` |
+| 앱 서명 인증서 | `3rd Party Mac Developer Application: Ikhyeon Cho (TGN2H82M56)` (로그인 키체인) |
+| 설치 패키지 서명 인증서 | `3rd Party Mac Developer Installer: Ikhyeon Cho (TGN2H82M56)` (로그인 키체인) |
+| 프로비저닝 프로파일 | `~/.aru-signing/Aru_Mac_App_Store.provisionprofile` ("Aru Mac App Store") |
+| App Store Connect API 키 | `~/.aru-signing/asc.env`가 가리키는 `.p8` — `node scripts/asc.mjs`가 읽는다 |
+
+인증서·프로파일을 다시 만들 때(만료·분실): `node scripts/asc.mjs cert …` / `profile …`. 키체인에 애플 중간 인증서(WWDR G3)가 없으면 서명 ID가 "신뢰할 수 없음"으로 나온다 — apple.com/certificateauthority의 `AppleWWDRCAG3.cer`를 넣는다.
+
 `docs/APP_REVIEW_NOTES.md`와 별개로, 빌드 절차는 `scripts/mas-build.sh` 머리말이 정본이다. 계정 없이 리허설: `MAS_DRY_RUN=1 scripts/mas-build.sh`.
