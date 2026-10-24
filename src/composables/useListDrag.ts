@@ -20,6 +20,20 @@ export interface DragOptions {
  * 손잡이(⋮⋮)를 잡아 끄는 동작. HTML5 드래그는 Tauri 창(특히 윈도우)에서 파일 드롭 처리와 부딪혀서
  * 포인터 이벤트로 직접 구현한다. 목록 계산은 core/todoList가 맡고 여기는 위치 판정만 한다.
  */
+/** 목록의 위·아래 가장자리에서 이 거리(px) 안이면 그 쪽으로 스크롤한다 */
+const EDGE = 32;
+/** 가장자리에 가장 가까울 때 한 프레임에 움직이는 거리(px) */
+const MAX_STEP = 14;
+
+/** 스크롤되는 가장 가까운 조상(자기 자신 포함). 목록이 창보다 길 때 그 목록을 감싼 칸이다 */
+function scrollerOf(el: HTMLElement): HTMLElement | null {
+  for (let e: HTMLElement | null = el; e && e !== document.body; e = e.parentElement) {
+    const overflow = getComputedStyle(e).overflowY;
+    if ((overflow === "auto" || overflow === "scroll") && e.scrollHeight > e.clientHeight) return e;
+  }
+  return null;
+}
+
 export function useListDrag(lists: Record<string, Ref<TodoItem[]>>, options: DragOptions = {}) {
   const state = reactive<{ draggingId: string | null; sourceKey: string | null; marker: DropMarker | null }>({
     draggingId: null,
@@ -28,8 +42,13 @@ export function useListDrag(lists: Record<string, Ref<TodoItem[]>>, options: Dra
   });
 
   function markerAt(x: number, y: number): DropMarker | null {
-    const el = document.elementFromPoint(x, y);
-    const listEl = el?.closest<HTMLElement>("[data-list]");
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    let listEl = el?.closest<HTMLElement>("[data-list]");
+    // 목록을 감싼 칸의 여백(맨 위·맨 아래)이면 그 칸의 목록에 놓는다. 끌며 스크롤해 맨 위까지 올라가면 손잡이가 여백에 있다
+    if (!listEl && el) {
+      const inner = scrollerOf(el)?.querySelectorAll<HTMLElement>("[data-list]");
+      if (inner?.length === 1) listEl = inner[0];
+    }
     const dateEl = options.onDropToDate ? el?.closest<HTMLElement>("[data-drop-date]") : null;
     if (!listEl && dateEl) return { listKey: "", beforeId: null, date: dateEl.dataset.dropDate! };
     if (!listEl) return null;
@@ -43,7 +62,28 @@ export function useListDrag(lists: Record<string, Ref<TodoItem[]>>, options: Dra
     return { listKey, beforeId: before?.dataset.itemId ?? null };
   }
 
+  let pointer = { x: 0, y: 0 };
+  let frame = 0;
+
+  // 끄는 동안 매 프레임: 손잡이가 목록 위·아래 가장자리에 있으면 그 쪽으로 스크롤한다.
+  // 마우스를 움직이지 않아도 스크롤되면 놓일 자리가 바뀌므로 표시도 다시 계산한다
+  function autoScroll() {
+    frame = requestAnimationFrame(autoScroll);
+    // 목록 위 여백(칸의 안쪽 여백)에 있어도 그 칸을 스크롤한다. 목록을 품은 칸만 스크롤한다
+    const under = document.elementFromPoint(pointer.x, pointer.y) as HTMLElement | null;
+    const box = under && scrollerOf(under);
+    if (!box?.querySelector("[data-list]")) return;
+    const rect = box.getBoundingClientRect();
+    const depth = pointer.y < rect.top + EDGE ? pointer.y - (rect.top + EDGE) : pointer.y > rect.bottom - EDGE ? pointer.y - (rect.bottom - EDGE) : 0;
+    if (!depth) return;
+    const step = Math.sign(depth) * Math.ceil(MAX_STEP * Math.min(1, Math.abs(depth) / EDGE));
+    const before = box.scrollTop;
+    box.scrollTop += step;
+    if (box.scrollTop !== before) state.marker = markerAt(pointer.x, pointer.y);
+  }
+
   function onMove(event: PointerEvent) {
+    pointer = { x: event.clientX, y: event.clientY };
     state.marker = markerAt(event.clientX, event.clientY);
   }
 
@@ -51,6 +91,8 @@ export function useListDrag(lists: Record<string, Ref<TodoItem[]>>, options: Dra
     state.draggingId = null;
     state.sourceKey = null;
     state.marker = null;
+    cancelAnimationFrame(frame);
+    frame = 0;
     document.body.classList.remove("dragging");
     window.removeEventListener("pointermove", onMove);
     window.removeEventListener("pointerup", onUp);
@@ -86,7 +128,9 @@ export function useListDrag(lists: Record<string, Ref<TodoItem[]>>, options: Dra
     event.preventDefault();
     state.draggingId = id;
     state.sourceKey = listKey;
+    pointer = { x: event.clientX, y: event.clientY };
     document.body.classList.add("dragging");
+    frame = requestAnimationFrame(autoScroll);
     window.addEventListener("pointermove", onMove);
     window.addEventListener("pointerup", onUp);
     window.addEventListener("pointercancel", end);

@@ -261,4 +261,65 @@ export default async function (browser) {
     assert.equal((await fs(page))["daily/2026-10-14.md"], "- [ ] 하나\n- [ ] 새 일\n- [x] 끝낸 일\n");
     await context.close();
   });
+
+  // 목록이 창보다 길면 끌던 할 일을 위·아래 가장자리에 대고 있는 동안 목록이 그 쪽으로 스크롤된다
+  const many = Array.from({ length: 24 }, (_, i) => `- [ ] 일${i + 1}\n`).join("");
+  const paneOf = (page) => page.locator('[data-list="today"]').locator("xpath=ancestor::*[contains(@class,'pane')][1]");
+
+  async function holdAtEdge(page, fromSelector, edge) {
+    const from = page.locator(fromSelector);
+    await from.hover();
+    const grip = await from.locator(".grip").boundingBox();
+    const pane = await paneOf(page).boundingBox();
+    await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2);
+    await page.mouse.down();
+    const y = edge === "bottom" ? pane.y + pane.height - 6 : pane.y + 6;
+    await page.mouse.move(pane.x + 60, y, { steps: 8 });
+    for (let i = 0; i < 40; i++) await page.clock.runFor(50);
+    await page.mouse.move(pane.x + 61, y);
+  }
+
+  await scenario("오늘 목록이 길 때 끌던 할 일을 아래 가장자리에 대고 있으면 목록이 내려가고, 놓으면 그 아래쪽으로 옮겨진다", async () => {
+    const { page, context } = await openApp(browser, { files: { "daily/2026-10-14.md": many } });
+    const pane = paneOf(page);
+    assert.ok(await pane.evaluate((e) => e.scrollHeight > e.clientHeight + 100), "목록이 창보다 길어야 한다");
+    await holdAtEdge(page, '[data-list="today"] .item >> nth=0', "bottom");
+    assert.ok((await pane.evaluate((e) => e.scrollTop)) > 100, `스크롤되지 않음: ${await pane.evaluate((e) => e.scrollTop)}`);
+    await page.mouse.up();
+    await page.clock.runFor(10);
+    const order = await texts(page, "today");
+    assert.ok(order.indexOf("일1") > 12, `일1이 아래로 가지 않음: ${order.indexOf("일1")}`);
+    assert.equal(order.length, 24);
+    await context.close();
+  });
+
+  await scenario("오늘 목록 아래쪽에서 끌던 할 일을 위 가장자리에 대고 있으면 목록이 올라가고, 놓으면 맨 위쪽으로 옮겨진다", async () => {
+    const { page, context } = await openApp(browser, { files: { "daily/2026-10-14.md": many } });
+    const pane = paneOf(page);
+    await pane.evaluate((e) => (e.scrollTop = e.scrollHeight));
+    await page.clock.runFor(10);
+    await holdAtEdge(page, '[data-list="today"] .item >> nth=23', "top");
+    assert.equal(await pane.evaluate((e) => e.scrollTop), 0);
+    await page.mouse.up();
+    await page.clock.runFor(10);
+    const order = await texts(page, "today");
+    assert.ok(order.indexOf("일24") <= 1, `일24가 위로 가지 않음: ${order.indexOf("일24")}`);
+    await context.close();
+  });
+
+  await scenario("가장자리가 아닌 곳에서 끌 때는 목록이 스크롤되지 않는다", async () => {
+    const { page, context } = await openApp(browser, { files: { "daily/2026-10-14.md": many } });
+    const pane = paneOf(page);
+    const from = page.locator('[data-list="today"] .item >> nth=0');
+    await from.hover();
+    const grip = await from.locator(".grip").boundingBox();
+    const box = await pane.boundingBox();
+    await page.mouse.move(grip.x + 4, grip.y + 4);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 60, box.y + box.height / 2, { steps: 6 });
+    for (let i = 0; i < 20; i++) await page.clock.runFor(50);
+    assert.equal(await pane.evaluate((e) => e.scrollTop), 0);
+    await page.mouse.up();
+    await context.close();
+  });
 }
