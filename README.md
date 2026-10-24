@@ -11,7 +11,7 @@
 
 [**App Store에서 받기**](https://apps.apple.com/app/id6826470064) · [소개 페이지](https://aruu.dev/aru/)
 
-<sub>Mac App Store ₩4,400 1회 결제 · 구독·광고 없음 · Apple Silicon·Intel 맥 · 서버도 계정도 없음 · Windows 출시 예정</sub>
+<sub>Mac App Store ₩4,400 1회 결제 · 구독·광고 없음 · Apple Silicon·Intel 맥 · 서버도 계정도 없음 · 아이폰·Windows 버전 준비 중</sub>
 
 <br>
 
@@ -67,6 +67,8 @@ Claude 데스크톱은 설정의 개발자 탭에서 `claude_desktop_config.json
 
 적는 대로 알아서 저장하고, 날짜마다 마크다운 파일 하나로 남긴다. Obsidian이나 메모장으로 열어도 그대로 읽힌다. 저장 폴더를 Dropbox나 iCloud Drive로 바꾸면 다른 맥과 함께 쓸 수 있다. 빈 폴더를 고르면 지금까지의 할 일을 복사해 가고, 이미 할 일이 있는 폴더를 고르면 그 폴더의 할 일을 쓰며 옮기지 않았다고 창 아래에 잠깐 알린다(이전 폴더의 할 일은 그대로 남는다). 지금 폴더를 열 수 없는 상태에서 다른 폴더를 고르면 옮길 할 일을 읽지 못했다고 알린다. 쓸 수 없는 폴더(권한 없음, 읽기 전용 디스크 등)를 고르면 아무것도 바꾸지 않고 그 이유를 알린다. 고른 폴더를 열 수 없게 되면(옮겼거나 아직 연결되지 않았으면) 다른 곳에 몰래 저장하지 않고 창 아래에 알린다. 폴더가 돌아오면 그사이 적은 것을 합쳐 저장한다. 다른 편집기에서 적은 제목·메모와 줄바꿈 형식(CRLF)은 그대로 두고(다른 편집기가 줄바꿈 형식만 바꿔 저장해도 할 일이 둘이 되지 않는다), AI나 `aru` 명령이 Aru와 같은 파일에 동시에 써도 서로 덮어쓰지 않고 합친다.
 
+지금은 iCloud Drive나 Dropbox 폴더로 맥끼리 함께 쓰고, 아이폰 버전이 나오면 같은 할 일을 아이폰에서도 이어서 볼 수 있게 한다.
+
 ```
 저장 폴더/
 ├── daily/
@@ -109,6 +111,8 @@ Claude 데스크톱은 설정의 개발자 탭에서 `claude_desktop_config.json
 ## 설치
 
 [App Store](https://apps.apple.com/app/id6826470064)에서 받는다. 업데이트도 App Store가 맡는다.
+
+**앞으로:** 아이폰·Windows 버전을 준비하고 있다. 맥에서 산 Aru 그대로 아이폰에서도 추가 결제 없이 쓰고, 기기끼리 할 일이 맞춰지게 한다(Windows판은 Microsoft Store라 따로 산다).
 
 결정: 직접 내려받는 0.2.8은 App Store판과 함께 내지 않고, 그 데이터(`~/Library/Application Support/dev.aruu.aru`)도 App Store판 샌드박스 컨테이너로 옮기지 않는다(`container-migration.plist` 없음).
 

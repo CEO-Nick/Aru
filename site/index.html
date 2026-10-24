@@ -147,6 +147,7 @@
   .feature p { margin: 0 0 14px; color: #c9c6c0 }
   .feature ul { margin: 18px 0 0; padding: 0; list-style: none; display: grid; gap: 10px }
   .feature li { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: baseline; font-size: 15.5px; color: #c9c6c0 }
+  .nb { white-space: nowrap }
   kbd {
     font: 500 12.5px/1 var(--mono); color: var(--paper); background: #ffffff12; border: 1px solid #ffffff22;
     border-bottom-width: 2px; border-radius: 6px; padding: 4px 7px; white-space: nowrap;
@@ -255,7 +256,7 @@
         </a>
         <a class="btn ghost" href="#guide">기능 보기</a>
       </div>
-      <div class="meta">Mac App Store ₩4,400 1회 결제 · 구독·광고 없음 · Apple Silicon·Intel 맥 · Windows 출시 예정</div>
+      <div class="meta"><span class="nb">Mac App Store ₩4,400 1회 결제</span> · <span class="nb">구독·광고 없음</span> · <span class="nb">Apple Silicon·Intel 맥</span> · <span class="nb">아이폰·Windows 버전 준비 중</span></div>
       <img class="hero-media" src="media/write.gif?v=202610240705" alt="Aru 창에서 할 일을 추가하고 체크하는 모습" />
     </div>
     <div class="slot" id="slot" aria-hidden="true"><div class="hint"><span class="live" aria-hidden="true"></span><span><span class="up">↑</span> 진짜 Aru예요. 체크하고, 적고, 투명도를 내려 보세요</span></div></div>
@@ -325,6 +326,7 @@
         <h2>할 일은<br />내 맥의 <em>텍스트</em> 파일로</h2>
         <p>서버도 계정도 없어요. 할 일은 오로지 내 맥에, 날짜마다 마크다운 파일 하나로 남아요. Obsidian이나 메모장 같은 다른 앱으로 열어도 그대로 읽혀요.</p>
         <p>설정에서 저장 폴더를 Dropbox나 iCloud Drive로 바꾸면 다른 맥과 함께 쓸 수 있어요. 빈 폴더를 고르면 지금까지의 할 일을 가져가고, 이미 할 일이 있는 폴더면 그 폴더의 할 일을 써요(이전 폴더의 할 일은 그대로 남아요). 고른 폴더를 열 수 없게 되면 다른 곳에 몰래 저장하지 않고 창 아래에 알려요. 다른 편집기에서 적은 제목·메모는 그대로 두고, AI가 같은 파일에 동시에 써도 서로 덮어쓰지 않고 합쳐요.</p>
+        <p>지금은 iCloud Drive나 Dropbox 폴더로 맥끼리 함께 쓰고, 아이폰 버전이 나오면 같은 할 일을 아이폰에서도 이어서 볼 수 있게 할 거예요.</p>
       </div>
       <pre class="reveal" aria-label="저장 폴더 구조 예시"><span class="dim">저장 폴더/   설정 → Finder에서 열기</span>
 ├── daily/
@@ -387,11 +389,12 @@
       <ol class="steps">
         <li><span><b>Mac App Store에서 받아요.</b> ₩4,400 한 번 결제하면 끝이고, 업데이트도 App Store가 알아서 해요.</span></li>
         <li><span><b>Launchpad나 Spotlight에서 "Aru"를 열어요.</b> 창을 닫아도 Dock 아이콘으로 다시 열고, 어느 앱에서든 ⌥Space로 바로 적어요.</span></li>
+        <li><span><b>아이폰·Windows 버전도 준비하고 있어요.</b> 지금 맥에서 산 Aru 그대로 아이폰에서도 추가 결제 없이 쓰고, 기기끼리 할 일이 맞춰지게 할게요.</span></li>
       </ol>
       <div class="cta">
         <a class="btn primary" href="https://apps.apple.com/app/id6826470064">App Store에서 받기</a>
       </div>
-      <div class="meta">Apple Silicon·Intel 맥 · macOS 11 이상 · Windows 버전은 준비 중이에요</div>
+      <div class="meta">Apple Silicon·Intel 맥 · macOS 11 이상 · 아이폰·Windows 버전은 준비 중이에요</div>
       <div class="meta">버그나 바라는 기능은 <a href="https://tally.so/r/laDqkN" style="color:inherit;text-decoration:underline">의견 보내기</a>로 알려 주세요</div>
     </div>
   </section>
