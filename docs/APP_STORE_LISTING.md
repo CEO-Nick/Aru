@@ -75,7 +75,7 @@ Claude Code, Codex, Claude 데스크톱과 연결하면 대화하다가 "오늘 
 적는 대로 알아서 저장하고, 날짜마다 마크다운 파일 하나로 남겨요. 다른 편집기로 열어도 그대로 읽혀요. 저장 폴더를 iCloud Drive나 Dropbox로 바꾸면 다른 맥과 함께 쓸 수 있어요.
 
 ■ 계정도, 서버도 없어요
-로그인이 없고, 사용 기록을 모으지 않으며, 앱이 인터넷으로 아무것도 보내지 않아요. 한 번 결제하면 끝이에요.
+로그인이 없고, 사용 기록을 모으지 않으며, 앱이 인터넷으로 아무것도 보내지 않아요. 구독도 광고도 없어요.
 ```
 
 ### 키워드 (100자, 쉼표로 구분, 띄어쓰기 없이)
@@ -132,7 +132,7 @@ Connect Claude Code, Codex, or Claude Desktop, and ask them to add to-dos mid-co
 Everything saves automatically, one Markdown file per day, readable in any editor. Point the storage folder at iCloud Drive or Dropbox to share it across Macs.
 
 ■ No account, no server
-No login, no analytics, and the app sends nothing over the internet. Pay once and it's yours.
+No login, no analytics, and the app sends nothing over the internet. No subscription, no ads.
 
 The app's interface is in Korean.
 ```
