@@ -4,11 +4,13 @@
 //   node scripts/asc.mjs get <경로>                       예: get /v1/certificates
 //   node scripts/asc.mjs patch <경로> <JSON 본문>          예: 스토어 문구 고치기
 //   node scripts/asc.mjs post <경로> <JSON 본문>           예: TestFlight 그룹·테스터 만들기
+//   node scripts/asc.mjs screenshots <스크린샷 세트 id> <png…>  세트의 기존 이미지를 지우고 이 순서로 올린다
 //   node scripts/asc.mjs cert <MAC_APP_DISTRIBUTION|MAC_INSTALLER_DISTRIBUTION> <csr 파일> <저장할 .cer>
 //   node scripts/asc.mjs bundle <identifier> <이름>
 //   node scripts/asc.mjs profile <이름> <bundleId 리소스 id> <인증서 리소스 id> <저장할 .provisionprofile>
-import { createSign } from "node:crypto";
+import { createHash, createSign } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
+import { basename } from "node:path";
 import { homedir } from "node:os";
 
 const envFile = process.env.ASC_ENV ?? `${homedir()}/.aru-signing/asc.env`;
@@ -45,6 +47,39 @@ async function call(method, path, body) {
 const [cmd, ...a] = process.argv.slice(2);
 if (cmd === "get") {
   console.log(JSON.stringify(await call("GET", a[0]), null, 2));
+} else if (cmd === "screenshots") {
+  const [setId, ...files] = a;
+  const old = await call("GET", `/v1/appScreenshotSets/${setId}/appScreenshots`);
+  for (const shot of old.data) await call("DELETE", `/v1/appScreenshots/${shot.id}`);
+  const ids = [];
+  for (const file of files) {
+    const bytes = readFileSync(file);
+    const r = await call("POST", "/v1/appScreenshots", {
+      data: {
+        type: "appScreenshots",
+        attributes: { fileName: basename(file), fileSize: bytes.length },
+        relationships: { appScreenshotSet: { data: { type: "appScreenshotSets", id: setId } } },
+      },
+    });
+    for (const op of r.data.attributes.uploadOperations) {
+      const res = await fetch(op.url, {
+        method: op.method,
+        headers: Object.fromEntries(op.requestHeaders.map((h) => [h.name, h.value])),
+        body: bytes.subarray(op.offset, op.offset + op.length),
+      });
+      if (!res.ok) throw new Error(`올리기 실패 ${basename(file)}: ${res.status}`);
+    }
+    const md5 = createHash("md5").update(bytes).digest("hex");
+    await call("PATCH", `/v1/appScreenshots/${r.data.id}`, {
+      data: { type: "appScreenshots", id: r.data.id, attributes: { uploaded: true, sourceFileChecksum: md5 } },
+    });
+    ids.push(r.data.id);
+    console.log(`올림 ${basename(file)}`);
+  }
+  await call("PATCH", `/v1/appScreenshotSets/${setId}/relationships/appScreenshots`, {
+    data: ids.map((id) => ({ type: "appScreenshots", id })),
+  });
+  console.log("순서 맞춤");
 } else if (cmd === "post") {
   console.log(JSON.stringify(await call("POST", a[0], JSON.parse(a[1])), null, 2));
 } else if (cmd === "patch") {
