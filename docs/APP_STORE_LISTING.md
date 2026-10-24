@@ -47,9 +47,9 @@ App Store Connect에서 앱을 만들고 칸마다 붙여 넣을 값이다. 글�
 모든 창 위에, 오늘 할 일
 ```
 
-### 프로모션 텍스트 (170자, 심사 없이 언제든 바꿀 수 있다)
+### 프로모션 텍스트 (170자, 심사 없이 언제든 바꿀 수 있다 — `⌥` 같은 기호는 거부된다)
 ```
-작은 창 하나에 오늘 할 일만. 다른 앱을 쓰는 동안에도 늘 화면 위에 떠 있고, ⌥Space로 어디서든 바로 적어요. 계정도 서버도 없이, 할 일은 내 맥의 파일로 남아요.
+작은 창 하나에 오늘 할 일만. 다른 앱을 쓰는 동안에도 늘 화면 위에 떠 있고, Option+Space로 어디서든 바로 적어요. 계정도 서버도 없이, 할 일은 내 맥의 파일로 남아요.
 ```
 
 ### 설명 (4000자)
@@ -106,7 +106,7 @@ To-dos above every window
 
 ### Promotional text (170)
 ```
-Just today's to-dos in one small window that stays on top while you work. Add from anywhere with ⌥Space. No account, no server: your to-dos are files on your Mac.
+Just today's to-dos in one small window that stays on top while you work. Add from anywhere with Option+Space. No account, no server: your to-dos are files on your Mac.
 ```
 
 ### Description (4000)
