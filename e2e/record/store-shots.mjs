@@ -9,23 +9,39 @@ const only = process.argv.slice(3);
 mkdirSync(out, { recursive: true });
 
 const TODAY = "daily/2026-10-14.md";
-const settings = JSON.stringify({ carryOver: "next-day", lastRolloverDate: "2026-10-14", alwaysOnTop: true, opacity: 100 });
+const baseSettings = { carryOver: "next-day", lastRolloverDate: "2026-10-14", alwaysOnTop: true, opacity: 100 };
 const someday = "- [ ] 여권 갱신\n- [ ] 책상 정리\n- [ ] 자전거 타이어 교체\n";
 const at = new Date("2026-10-14T09:58:00").getTime();
 
 const shots = [
-  { name: "01-main", scene: "main", files: { [TODAY]: "- [x] 메일 확인\n- [ ] 디자인 리뷰 준비\n- [ ] 회의록 정리\n- [ ] 저녁 장보기\n", "someday.md": someday } },
   {
-    name: "02-quick",
-    scene: "quick",
-    files: { [TODAY]: "- [x] 메일 확인\n- [ ] 디자인 리뷰 준비\n- [ ] 회의록 정리\n", "someday.md": someday },
-    prepare: async (page) => {
-      const input = page.frameLocator("#quick").locator("input");
-      await input.fill("노트북 배터리 교체");
+    name: "01-floating",
+    scene: "floating",
+    settings: { opacity: 60 },
+    files: {
+      [TODAY]: "- [ ] PR 리뷰 반영 <!-- from:2026-10-13 -->\n- [ ] 배포 체크리스트 <!-- from:2026-10-13 -->\n- [ ] 디자인 리뷰 준비\n- [x] 메일 확인\n",
+      "daily/2026-10-13.md": "- [x] 스크럼\n- [x] 회의록 정리\n",
+      "someday.md": someday,
     },
   },
   {
-    name: "03-overview",
+    name: "02-ai",
+    scene: "ai",
+    files: {
+      [TODAY]: `- [x] 스크럼\n- [ ] PR 리뷰 반영\n- [ ] 회의 자료 출력 <!-- ai:claude-code@${at} -->\n- [ ] 지난 회의록 다시 읽기 <!-- ai:claude-code@${at} -->\n- [ ] 질문 목록 정리 <!-- ai:claude-code@${at} -->\n`,
+      "someday.md": someday,
+    },
+  },
+  {
+    name: "03-files",
+    scene: "files",
+    files: {
+      [TODAY]: "- [x] 메일 확인\n- [ ] 디자인 리뷰 준비\n- [ ] 회의록 정리 <!-- from:2026-10-13 -->\n- [ ] 저녁 장보기\n",
+      "someday.md": someday,
+    },
+  },
+  {
+    name: "04-calendar",
     scene: "overview",
     files: {
       "daily/2026-10-05.md": "- [x] 분기 계획 공유\n",
@@ -41,20 +57,12 @@ const shots = [
     },
   },
   {
-    name: "04-midnight",
-    scene: "midnight",
-    files: {
-      [TODAY]: "- [ ] PR 리뷰 반영 <!-- from:2026-10-13 -->\n- [ ] 배포 체크리스트 <!-- from:2026-10-13 -->\n- [ ] 오늘 회고 쓰기\n",
-      "daily/2026-10-13.md": "- [x] 스크럼\n- [x] 회의록 정리\n",
-      "someday.md": someday,
-    },
-  },
-  {
-    name: "05-ai",
-    scene: "ai",
-    files: {
-      [TODAY]: `- [x] 스크럼\n- [ ] PR 리뷰 반영\n- [ ] 회의 자료 출력 <!-- ai:claude-code@${at} -->\n- [ ] 지난 회의록 다시 읽기 <!-- ai:claude-code@${at} -->\n- [ ] 질문 목록 정리 <!-- ai:claude-code@${at} -->\n`,
-      "someday.md": someday,
+    name: "05-quick",
+    scene: "quick",
+    files: { [TODAY]: "- [x] 메일 확인\n- [ ] 디자인 리뷰 준비\n- [ ] 회의록 정리\n", "someday.md": someday },
+    prepare: async (page) => {
+      const input = page.frameLocator("#quick").locator("input");
+      await input.fill("노트북 배터리 교체");
     },
   },
 ];
@@ -67,7 +75,7 @@ try {
     const s = await openScene(browser, {
       url: `http://localhost:1430/e2e/record/storestage.html?scene=${shot.scene}`,
       viewport: { width: 1440, height: 900 },
-      files: { "settings.json": settings, ...shot.files },
+      files: { "settings.json": JSON.stringify({ ...baseSettings, ...shot.settings }), ...shot.files },
     });
     await s.page.waitForTimeout(1200);
     await shot.prepare?.(s.page);

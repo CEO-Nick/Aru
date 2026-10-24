@@ -148,11 +148,13 @@ todo,to-do,checklist,tasks,floating,always on top,productivity,markdown,calendar
 
 | 파일 | 장면 |
 |---|---|
-| `docs/app-store/screenshots/ko/01-main.png` | 모든 창 위에, 오늘 할 일 |
-| `docs/app-store/screenshots/ko/02-quick.png` | ⌥Space 빠른 입력 |
-| `docs/app-store/screenshots/ko/03-overview.png` | 월 달력 |
-| `docs/app-store/screenshots/ko/04-midnight.png` | 끝내지 못한 일은 다음 날로 |
-| `docs/app-store/screenshots/ko/05-ai.png` | AI에게 말하면 할 일로 |
+| `docs/app-store/screenshots/ko/01-floating.png` | 모든 창 위에, 가리지 않게 — 핀·투명도 + 자정에 넘어온 할 일 |
+| `docs/app-store/screenshots/ko/02-ai.png` | AI는 넣기만, 지우지는 못해요 — AI 표시·한 번에 되돌리기 |
+| `docs/app-store/screenshots/ko/03-files.png` | 내 맥의 마크다운 파일로 |
+| `docs/app-store/screenshots/ko/04-calendar.png` | 한 달을 한눈에 |
+| `docs/app-store/screenshots/ko/05-quick.png` | ⌥Space로 어디서든 바로 적기 |
+
+순서는 차별점 순(2026-10-24 결정). 다른 회사 앱 화면·로고는 넣지 않는다(상표) — 편집기는 이름 없는 일반 편집기로 그린다.
 
 ## 6. App Review 정보
 

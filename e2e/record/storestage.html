@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <title>Aru 앱스토어 스크린샷 무대</title>
-<!-- 1440×900을 2배로 찍어 2880×1800(앱스토어 맥 스크린샷 규격)을 만든다. ?scene=main|quick|overview|midnight|ai -->
+<!-- 1440×900을 2배로 찍어 2880×1800(앱스토어 맥 스크린샷 규격)을 만든다. ?scene=floating|ai|files|overview|quick -->
 <style>
   html, body { margin: 0; width: 1440px; height: 900px; overflow: hidden; }
   body {
@@ -66,7 +66,7 @@
     <i>expect</i>(week.today).<i>toHaveLength</i>(<u>3</u>)
   })
 })`;
-  const terminal = `<span class="prompt">&gt;</span> 회의 준비할 거 세 개 오늘 할 일에 넣어 줘
+  const terminal = `<span class="prompt">&gt;</span> 회의 준비할 거 세 개 할 일에 넣어 줘
 
 <span class="muted">● aru - add_todos (MCP)</span>
   <span class="ok">✓</span> 회의 자료 출력
@@ -74,12 +74,24 @@
   <span class="ok">✓</span> 질문 목록 정리
 
 오늘 할 일에 3개를 넣었어요.`;
+  const mdFile = `<span class="muted">todo/</span>
+<span class="muted">├─ daily/</span>
+<span class="muted">│  ├─ 2026-10-13.md</span>
+<span class="muted">│  └─</span> <b>2026-10-14.md</b>
+<span class="muted">└─ someday.md</span>
+
+<span class="muted">───────────── 2026-10-14.md ─────────────</span>
+
+<i>- [x]</i> 메일 확인
+<i>- [ ]</i> 디자인 리뷰 준비
+<i>- [ ]</i> 회의록 정리 <span class="muted">&lt;!-- from:2026-10-13 --&gt;</span>
+<i>- [ ]</i> 저녁 장보기`;
   const scenes = {
-    main: { title: "모든 창 위에,<br>오늘 할 일", sub: "작은 창 하나에 오늘 할 일만 띄워 둬요.<br>다른 일을 하는 동안에도 늘 보여요.", editor: code, win: [900, 120, 1.45] },
-    quick: { title: "어디서든<br>바로 적기", sub: '<span class="key">⌥</span><span class="key">Space</span> 를 누르면 입력창이 떠요.<br>쓰던 앱을 떠나지 않고 한 줄로 적어요.', editor: code, win: [1010, 250, 1.2], quick: [660, 120, 1.0] },
+    floating: { title: "모든 창 위에,<br>가리지 않게", sub: "핀으로 늘 위에 두고, 투명도를 낮추면<br>뒤의 작업이 비쳐 보여요.<br>끝내지 못한 일은 자정에 다음 날로 넘어와요.", editor: code, editorBox: [640, 90, 740, 720], win: [960, 150, 1.4] },
+    ai: { title: "AI는 넣기만,<br>지우지는 못해요", sub: "Claude Code·Codex에게 부탁하면<br>바로 들어와요. AI가 넣은 건 표시가 붙고<br>한 번에 되돌릴 수 있어요.", editor: terminal, win: [990, 190, 1.32], editorBox: [600, 100, 520, 400] },
+    files: { title: "내 맥의<br>마크다운 파일로", sub: "서버도 계정도 없어요. 날짜마다 파일 하나,<br>어떤 편집기로 열어도 그대로 읽혀요.", editor: mdFile, editorBox: [640, 150, 520, 560], win: [1060, 200, 1.15] },
     overview: { top: true, title: "한 달을 한눈에", sub: "달력에서 날짜를 골라 고치고, 언젠가 할 일을 날짜로 끌어다 놓아요." },
-    midnight: { title: "끝내지 못한 일은<br>다음 날로", sub: "자정이 지나면 남은 일이<br>어디서 넘어왔는지 표시를 달고 따라와요.", editor: code, win: [900, 120, 1.45] },
-    ai: { title: "AI에게 말하면<br>할 일로", sub: "Claude·Codex에게 부탁하면<br>Aru에 바로 들어가요. 누가 넣었는지도 보여요.", editor: terminal, win: [960, 190, 1.3], editorBox: [640, 110, 560, 420] },
+    quick: { title: "어디서든<br>바로 적기", sub: '<span class="key">⌥</span><span class="key">Space</span> 를 누르면 입력창이 떠요.<br>쓰던 앱을 떠나지 않고 한 줄로 적어요.', editor: code, win: [1010, 250, 1.2], quick: [660, 120, 1.0] },
   };
   const s = scenes[scene];
   document.getElementById("title").innerHTML = s.title;
@@ -108,6 +120,9 @@
     q.innerHTML = `<iframe id="quick" src="/index.html#quick"></iframe>`;
     document.body.appendChild(q);
   }
+  addEventListener("message", (e) => {
+    if (e.data?.type === "opacity") document.querySelectorAll(".win").forEach((w) => (w.style.opacity = e.data.alpha));
+  });
   if (scene === "overview") {
     const b = document.createElement("div");
     b.className = "big";
