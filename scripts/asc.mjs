@@ -4,6 +4,7 @@
 //   node scripts/asc.mjs get <경로>                       예: get /v1/certificates
 //   node scripts/asc.mjs patch <경로> <JSON 본문>          예: 스토어 문구 고치기
 //   node scripts/asc.mjs post <경로> <JSON 본문>           예: TestFlight 그룹·테스터 만들기
+//   node scripts/asc.mjs delete <경로>                     예: 보낸 팀 초대 취소
 //   node scripts/asc.mjs screenshots <스크린샷 세트 id> <png…>  세트의 기존 이미지를 지우고 이 순서로 올린다
 //   node scripts/asc.mjs cert <MAC_APP_DISTRIBUTION|MAC_INSTALLER_DISTRIBUTION> <csr 파일> <저장할 .cer>
 //   node scripts/asc.mjs bundle <identifier> <이름>
@@ -80,6 +81,9 @@ if (cmd === "get") {
     data: ids.map((id) => ({ type: "appScreenshots", id })),
   });
   console.log("순서 맞춤");
+} else if (cmd === "delete") {
+  await call("DELETE", a[0]);
+  console.log("삭제함");
 } else if (cmd === "post") {
   console.log(JSON.stringify(await call("POST", a[0], JSON.parse(a[1])), null, 2));
 } else if (cmd === "patch") {
