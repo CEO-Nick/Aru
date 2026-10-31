@@ -1178,32 +1178,59 @@ mod platform {
         s.encode_wide().chain(Some(0)).collect()
     }
 
-    /// `.mcpb`를 여는 앱의 이름. 스토어(MSIX)판 Claude는 WindowsApps 안이라 경로로 못 찾고, 파일 연결로만 보인다
-    fn mcpb_handler_name() -> Option<String> {
-        use windows_sys::Win32::UI::Shell::{AssocQueryStringW, ASSOCF_INIT_IGNOREUNKNOWN, ASSOCSTR_FRIENDLYAPPNAME};
-        let ext = wide(".mcpb".as_ref());
-        let mut buf = [0u16; 260];
+    /// 파일 형식·URL 처리기에 연결된 값(ASSOCSTR). 없으면 None
+    fn assoc(target: &str, what: windows_sys::Win32::UI::Shell::ASSOCSTR) -> Option<String> {
+        use windows_sys::Win32::UI::Shell::{AssocQueryStringW, ASSOCF_INIT_IGNOREUNKNOWN};
+        let key = wide(target.as_ref());
+        let open = wide("open".as_ref());
+        let mut buf = vec![0u16; 1024];
         let mut len = buf.len() as u32;
-        let hr = unsafe {
-            AssocQueryStringW(ASSOCF_INIT_IGNOREUNKNOWN, ASSOCSTR_FRIENDLYAPPNAME, ext.as_ptr(), std::ptr::null(), buf.as_mut_ptr(), &mut len)
-        };
+        let hr = unsafe { AssocQueryStringW(ASSOCF_INIT_IGNOREUNKNOWN, what, key.as_ptr(), open.as_ptr(), buf.as_mut_ptr(), &mut len) };
         if hr != 0 {
             return None;
         }
         let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
-        Some(String::from_utf16_lossy(&buf[..end]))
+        Some(String::from_utf16_lossy(&buf[..end])).filter(|v| !v.is_empty())
     }
 
-    /// 깔려 있는 Claude 데스크톱. 예전 설치판은 실행 파일 경로, 스토어판은 빈 문자열(파일 연결로 연다)
+    /// 깔려 있는 Claude 데스크톱. 실행 파일 경로를 주고, 경로는 못 찾았지만 .mcpb가 Claude에 연결돼 있으면 빈 문자열(기본 앱으로 연다).
+    /// 설치 방식(예전 Squirrel·새 설치 관리자·스토어판)마다 위치가 달라 후보를 차례로 본다
     pub fn claude_desktop() -> Option<String> {
-        if let Some(exe) = crate::cli::local_app_data().map(|l| l.join("AnthropicClaude").join("claude.exe")) {
-            if exe.is_file() {
-                return Some(exe.to_string_lossy().into_owned());
+        use windows_sys::Win32::UI::Shell::{ASSOCSTR_EXECUTABLE, ASSOCSTR_FRIENDLYAPPNAME};
+        let local = crate::cli::local_app_data();
+        let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+        if let Some(l) = &local {
+            candidates.push(l.join("AnthropicClaude").join("claude.exe"));
+            candidates.push(l.join("Claude").join("claude.exe"));
+            candidates.push(l.join("Claude").join("Claude.exe"));
+            candidates.push(l.join("Programs").join("Claude").join("Claude.exe"));
+            // Squirrel 형식은 app-<버전> 폴더 안에 실행 파일이 있다
+            for base in [l.join("Claude"), l.join("AnthropicClaude")] {
+                if let Ok(entries) = std::fs::read_dir(&base) {
+                    for e in entries.flatten() {
+                        if e.file_name().to_string_lossy().starts_with("app-") {
+                            candidates.push(e.path().join("claude.exe"));
+                        }
+                    }
+                }
             }
         }
-        let handler = mcpb_handler_name();
-        super::diag(&format!("claude desktop: .mcpb handler {handler:?}"));
-        handler.filter(|name| name.to_lowercase().contains("claude")).map(|_| String::new())
+        if let Some(pf) = std::env::var_os("ProgramFiles").map(std::path::PathBuf::from) {
+            candidates.push(pf.join("Claude").join("Claude.exe"));
+        }
+        // claude:// 로그인 주소를 받는 실행 파일. 설치 방식과 상관없이 등록된다
+        let protocol = assoc("claude", ASSOCSTR_EXECUTABLE);
+        let mcpb = assoc(".mcpb", ASSOCSTR_FRIENDLYAPPNAME);
+        let found = candidates.iter().find(|p| p.is_file()).map(|p| p.to_string_lossy().into_owned());
+        super::diag(&format!("claude desktop: found={found:?} protocol={protocol:?} mcpb={mcpb:?}"));
+        if found.is_some() {
+            return found;
+        }
+        // WindowsApps 안의 실행 파일은 경로로 직접 띄울 수 없다(접근 거부). 그 밖이면 처리기 실행 파일을 쓴다
+        if let Some(exe) = protocol.filter(|p| !p.to_lowercase().contains("\\windowsapps\\") && std::path::Path::new(p).is_file()) {
+            return Some(exe);
+        }
+        mcpb.filter(|name| name.to_lowercase().contains("claude")).map(|_| String::new())
     }
 
     /// app이 비어 있으면 파일 연결(기본 앱)로 연다
