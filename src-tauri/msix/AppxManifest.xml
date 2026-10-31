@@ -63,9 +63,10 @@
                  <Extensions> (아래 블록을 이리로 옮김) </Extensions>
                </Application> -->
         <uap5:Extension Category="windows.appExecutionAlias" Executable="{{CLI_EXE}}" EntryPoint="Windows.FullTrustApplication">
-          <!-- Subsystem은 ExecutionAlias에 단다. 부모 AppExecutionAlias에 달면 MakeAppx가 매니페스트를 거부한다 -->
+          <!-- desktop4:Subsystem은 AppExecutionAlias·ExecutionAlias 어디에도 스키마상 달 수 없다(MakeAppx 거부, CI 실측).
+               aru-cli.exe는 PE 헤더가 이미 콘솔 서브시스템이라 별칭으로 띄워도 콘솔에 붙는다 -->
           <uap5:AppExecutionAlias>
-            <uap5:ExecutionAlias Alias="aru.exe" desktop4:Subsystem="console" />
+            <uap5:ExecutionAlias Alias="aru.exe" />
           </uap5:AppExecutionAlias>
         </uap5:Extension>
       </Extensions>
