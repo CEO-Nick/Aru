@@ -647,7 +647,15 @@ fn install_claude_desktop(app: AppHandle) -> Result<(), String> {
     let claude = platform::claude_desktop().ok_or("Claude 데스크톱을 찾지 못했어요")?;
     let dir = app.path().app_cache_dir().map_err(|_| "Claude에 넘길 확장 파일을 둘 폴더를 찾지 못했어요".to_string())?;
     let file = mcpb::write_bundle(&dir, &aru_command()?, &app.package_info().version.to_string(), env!("CARGO_PKG_AUTHORS"))?;
-    if platform::open_with(&file, &claude) { Ok(()) } else { Err("Claude 데스크톱으로 확장 파일을 열지 못했어요".into()) }
+    if platform::open_with(&file, &claude) {
+        return Ok(());
+    }
+    // 스토어판 Claude는 .mcpb 파일 연결이 없을 수 있다. 파일을 탐색기로 보여 주고 끌어다 놓게 안내한다
+    #[cfg(windows)]
+    if claude.is_empty() && platform::reveal(&file) {
+        return Err("Claude 데스크톱이 이 파일을 바로 열지 못해 탐색기로 보여 드렸어요. Claude 데스크톱 설정의 확장 프로그램 화면에 Aru.mcpb를 끌어다 놓으면 설치돼요".into());
+    }
+    Err("Claude 데스크톱으로 확장 파일을 열지 못했어요".into())
 }
 
 #[cfg(any(target_os = "macos", windows))]
@@ -1230,7 +1238,20 @@ mod platform {
         if let Some(exe) = protocol.filter(|p| !p.to_lowercase().contains("\\windowsapps\\") && std::path::Path::new(p).is_file()) {
             return Some(exe);
         }
-        mcpb.filter(|name| name.to_lowercase().contains("claude")).map(|_| String::new())
+        if mcpb.is_some_and(|name| name.to_lowercase().contains("claude")) {
+            return Some(String::new());
+        }
+        // 스토어(MSIX)판: 패키지 데이터 폴더(Packages\Claude_<게시자 해시>)로만 설치가 보인다
+        let packaged = local.as_ref().and_then(|l| std::fs::read_dir(l.join("Packages")).ok()).is_some_and(|mut it| {
+            it.any(|e| e.is_ok_and(|e| e.file_name().to_string_lossy().starts_with("Claude_")))
+        });
+        super::diag(&format!("claude desktop: packaged={packaged}"));
+        packaged.then(String::new)
+    }
+
+    /// 탐색기에서 파일을 골라 둔 채 보여 준다
+    pub fn reveal(file: &Path) -> bool {
+        std::process::Command::new("explorer.exe").arg(format!("/select,{}", file.display())).spawn().is_ok()
     }
 
     /// app이 비어 있으면 파일 연결(기본 앱)로 연다
