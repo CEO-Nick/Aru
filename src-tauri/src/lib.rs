@@ -9,7 +9,9 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::Duration;
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState};
-use tauri::menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder};
+use tauri::menu::Menu;
+#[cfg(not(windows))]
+use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
 #[cfg(not(target_os = "macos"))]
 use tauri::menu::MenuItem;
 #[cfg(not(target_os = "macos"))]
@@ -21,13 +23,13 @@ use tauri::{
 
 /// 빠른 입력창을 띄우기 직전에 쓰던 앱. 입력창을 닫으면 그 앱으로 돌려보낸다
 #[derive(Default)]
-struct QuickState(Mutex<Option<i32>>);
+struct QuickState(Mutex<Option<platform::AppRef>>);
 
 // 앱스토어판은 투명 창을 못 쓴다(비공개 API). 막대 크기 그대로 기본 창을 띄워 둥근 모서리·그림자는 macOS에 맡긴다
 const QUICK_WIDTH: f64 = 588.0;
 const QUICK_HEIGHT: f64 = 60.0;
 
-/// 전역 단축키(⌥Space)로 지금 보고 있는 화면 위쪽 가운데에 빠른 입력창을 띄운다. 이미 떠 있으면 닫는다
+/// 전역 단축키(⌥Space, Windows는 Ctrl+Alt+Space)로 지금 보고 있는 화면 위쪽 가운데에 빠른 입력창을 띄운다. 이미 떠 있으면 닫는다
 fn toggle_quick(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("quick") {
         if window.is_visible().unwrap_or(false) {
@@ -38,24 +40,32 @@ fn toggle_quick(app: &AppHandle) {
     *app.state::<QuickState>().0.lock().unwrap() = platform::frontmost_other_app();
     let window = match app.get_webview_window("quick") {
         Some(w) => w,
-        None => match WebviewWindowBuilder::new(app, "quick", WebviewUrl::App("index.html#quick".into()))
-            .title("Aru 빠른 입력")
-            .inner_size(QUICK_WIDTH, QUICK_HEIGHT)
-            .title_bar_style(tauri::TitleBarStyle::Overlay)
-            .hidden_title(true)
-            .resizable(false)
-            .always_on_top(true)
-            .visible_on_all_workspaces(true)
-            .skip_taskbar(true)
-            .visible(false)
-            .build()
-        {
-            Ok(w) => w,
-            Err(e) => {
-                trace(&format!("quick window: {e}"));
-                return;
+        None => {
+            let builder = WebviewWindowBuilder::new(app, "quick", WebviewUrl::App("index.html#quick".into()))
+                .title("Aru 빠른 입력")
+                .inner_size(QUICK_WIDTH, QUICK_HEIGHT);
+            #[cfg(target_os = "macos")]
+            let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+            #[cfg(windows)]
+            let builder = builder.decorations(false);
+            match builder
+                .resizable(false)
+                .always_on_top(true)
+                .visible_on_all_workspaces(true)
+                .skip_taskbar(true)
+                .visible(false)
+                .build()
+            {
+                Ok(w) => {
+                    platform::round_corners(&w);
+                    w
+                }
+                Err(e) => {
+                    trace(&format!("quick window: {e}"));
+                    return;
+                }
             }
-        },
+        }
     };
     let _ = platform::hide_window_buttons(&window);
     place_on_cursor_screen(app, &window);
@@ -364,6 +374,7 @@ fn open_overview(app: AppHandle, date: Option<String>) -> Result<(), String> {
         .build()
         .map_err(overview_error)?;
     if let Some(window) = app.get_webview_window("overview") {
+        platform::round_corners(&window);
         let _ = window.set_focus();
     }
     Ok(())
@@ -509,6 +520,24 @@ fn save_then_quit(app: &AppHandle) {
     });
 }
 
+#[derive(serde::Serialize)]
+struct PlatformInfo {
+    os: &'static str,
+}
+
+fn os_name(os: &'static str) -> &'static str {
+    match os {
+        "windows" | "linux" => os,
+        _ => "macos",
+    }
+}
+
+/// 화면이 OS별 문구·단축키 표기를 고른다(src/platform/os.ts)
+#[tauri::command]
+fn platform_info() -> PlatformInfo {
+    PlatformInfo { os: os_name(std::env::consts::OS) }
+}
+
 /// 피드백 폼에 채울 OS 버전. 웹뷰의 userAgent는 macOS 버전을 10.15로 고정해 보여 줘서 따로 묻는다
 #[tauri::command]
 fn os_version() -> String {
@@ -521,9 +550,23 @@ fn os_version() -> String {
             patch => format!("macOS {}.{}.{patch}", v.majorVersion, v.minorVersion),
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
+    {
+        platform::windows_version()
+    }
+    #[cfg(not(any(target_os = "macos", windows)))]
     {
         std::env::consts::OS.into()
+    }
+}
+
+/// 빌드 22000부터 Windows 11이다(주 버전은 둘 다 10)
+#[cfg(any(windows, test))]
+fn windows_name(major: u32, build: u32) -> String {
+    match major {
+        10.. if build >= 22000 => format!("Windows 11 ({build})"),
+        10.. => format!("Windows 10 ({build})"),
+        _ => format!("Windows NT {major} ({build})"),
     }
 }
 
@@ -543,7 +586,24 @@ struct AiConnectInfo {
 /// 앱 실행 파일이 곧 aru 명령이다. AI 도구가 이 경로를 `aru mcp`로 실행한다
 fn aru_command() -> Result<String, String> {
     let exe = std::env::current_exe().map_err(|e| format!("Aru 실행 파일 위치를 알지 못했어요: {}", storage::io_message(&e)))?;
+    #[cfg(windows)]
+    let exe = {
+        let local = cli::local_app_data();
+        cli_command_path(platform::packaged() && local.is_some(), local.as_deref().unwrap_or(std::path::Path::new("")), &exe)
+    };
     Ok(exe.to_string_lossy().into_owned())
+}
+
+/// Windows의 앱 실행 파일은 창 전용(GUI 서브시스템)이라 터미널에 아무것도 찍지 못한다. 콘솔용 aru-cli를 가리킨다.
+/// 설치본(MSIX) 안의 경로(`C:\Program Files\WindowsApps\…`)는 업데이트마다 바뀌고 권한으로 막혀 있어,
+/// 매니페스트가 PATH에 걸어 주는 실행 별칭을 준다
+#[cfg(any(windows, test))]
+fn cli_command_path(packaged: bool, local_app_data: &std::path::Path, exe: &std::path::Path) -> PathBuf {
+    if packaged {
+        local_app_data.join("Microsoft").join("WindowsApps").join("aru.exe")
+    } else {
+        exe.with_file_name("aru-cli.exe")
+    }
 }
 
 #[tauri::command]
@@ -561,6 +621,7 @@ fn install_claude_desktop(app: AppHandle) -> Result<(), String> {
     if platform::open_with(&file, &claude) { Ok(()) } else { Err("Claude 데스크톱으로 확장 파일을 열지 못했어요".into()) }
 }
 
+#[cfg(any(target_os = "macos", windows))]
 fn show_main_window(app: &AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.unminimize();
@@ -570,6 +631,8 @@ fn show_main_window(app: &AppHandle) {
 }
 
 // 기본 앱 메뉴의 "종료"(Cmd+Q)는 화면에 저장할 틈을 주지 않고 바로 끈다. 같은 자리에 저장 후 종료하는 항목을 둔다
+// Windows는 메뉴 막대가 창 안에 그려져 320px 창에 맞지 않아 달지 않는다. 종료는 트레이 메뉴로 한다
+#[cfg(not(windows))]
 fn build_app_menu(app: &App) -> tauri::Result<Menu<tauri::Wry>> {
     let quit = MenuItemBuilder::with_id("app-quit", "Aru 종료")
         .accelerator("CmdOrCtrl+Q")
@@ -624,9 +687,17 @@ fn build_tray(app: &App) -> tauri::Result<()> {
             "quit" => request_quit(app),
             _ => {}
         });
+    // Windows에는 템플릿 이미지가 없어 흑백 아이콘이 어두운 작업 표시줄에서 보이지 않는다. 컬러 앱 아이콘을 쓴다
+    #[cfg(windows)]
+    {
+        tray = tray.icon(tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?);
+    }
     // 메뉴 막대 아이콘은 흑백 템플릿 이미지여야 다크·라이트 메뉴 막대 색에 맞춰 칠해진다
-    let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
-    tray = tray.icon(icon).icon_as_template(true);
+    #[cfg(not(windows))]
+    {
+        let icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?;
+        tray = tray.icon(icon).icon_as_template(true);
+    }
     tray.build(app)?;
     Ok(())
 }
@@ -665,6 +736,7 @@ fn dev_hooks(app: &App) -> Result<(), String> {
 }
 
 // 0.2.2까지의 앱 ID. 그때 만든 할 일·설정 폴더를 새 ID 폴더로 옮겨 온다
+#[cfg(target_os = "macos")]
 const LEGACY_IDENTIFIER: &str = "dev.aruu.floatingtodo";
 
 #[cfg(target_os = "macos")]
@@ -686,7 +758,11 @@ pub fn run() {
     // 플러그인들이 새 폴더를 만들기 전에 옮겨야 한다
     #[cfg(target_os = "macos")]
     move_legacy_data(&context.config().identifier);
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    // Windows는 두 번 실행을 막아 주지 않는다. 두 번째 실행은 켜져 있는 작은 창을 보여 주고 끝난다(플러그인 중 가장 먼저 등록해야 한다)
+    #[cfg(windows)]
+    let builder = builder.plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| show_main_window(app)));
+    builder
         // 두 번 실행 막기는 macOS가 한다. 이미 켜져 있을 때 다시 열면 아래 Reopen으로 작은 창을 보여 준다
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -710,13 +786,19 @@ pub fn run() {
             if let Err(e) = app.global_shortcut().register(quick_shortcut()) {
                 trace(&format!("단축키 등록 실패: {e}"));
             }
-            let menu = build_app_menu(app)?;
-            app.set_menu(menu)?;
-            app.on_menu_event(|app, event| {
-                if event.id().as_ref() == "app-quit" {
-                    request_quit(app);
-                }
-            });
+            #[cfg(not(windows))]
+            {
+                let menu = build_app_menu(app)?;
+                app.set_menu(menu)?;
+                app.on_menu_event(|app, event| {
+                    if event.id().as_ref() == "app-quit" {
+                        request_quit(app);
+                    }
+                });
+            }
+            if let Some(main) = app.get_webview_window("main") {
+                platform::round_corners(&main);
+            }
             platform::hook_terminate(app.handle().clone());
             if let Ok(cache) = app.path().app_cache_dir() {
                 mcpb::remove_bundle(&cache);
@@ -739,6 +821,7 @@ pub fn run() {
             data_root_status,
             data_root_info,
             reset_data_root,
+            platform_info,
             os_version,
             recent_ai_batches,
             ai_connect_info,
@@ -748,6 +831,7 @@ pub fn run() {
         .expect("error while building tauri application")
         .run(|app, event| match event {
             // 작은 창을 닫아(숨겨) 둔 상태에서 Dock 아이콘을 누르면 다시 보여 준다
+            #[cfg(target_os = "macos")]
             RunEvent::Reopen { .. } => show_main_window(app),
             RunEvent::ExitRequested { code, api, .. } if hold_exit(code) => {
                 api.prevent_exit();
@@ -757,8 +841,15 @@ pub fn run() {
         });
 }
 
+#[cfg(not(windows))]
 fn quick_shortcut() -> Shortcut {
     Shortcut::new(Some(Modifiers::ALT), Code::Space)
+}
+
+// Alt+Space는 Windows 창 시스템 메뉴·PowerToys Run이 쓴다
+#[cfg(windows)]
+fn quick_shortcut() -> Shortcut {
+    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space)
 }
 
 #[cfg(target_os = "macos")]
@@ -771,6 +862,9 @@ mod platform {
     use tauri::WebviewWindow;
 
     const CLAUDE_DESKTOP: &str = "com.anthropic.claudefordesktop";
+
+    /// 빠른 입력창을 띄우기 전 앱의 pid
+    pub type AppRef = i32;
 
     static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
 
@@ -844,14 +938,17 @@ mod platform {
         })
     }
 
+    /// 둥근 모서리·그림자는 macOS가 기본으로 그린다
+    pub fn round_corners(_window: &WebviewWindow) {}
+
     /// 지금 앞에 있는 앱(Aru 자신은 빼고)
-    pub fn frontmost_other_app() -> Option<i32> {
+    pub fn frontmost_other_app() -> Option<AppRef> {
         let app = NSWorkspace::sharedWorkspace().frontmostApplication()?;
         let pid = app.processIdentifier();
         (pid != NSRunningApplication::currentApplication().processIdentifier()).then_some(pid)
     }
 
-    pub fn activate_app(pid: i32) {
+    pub fn activate_app(pid: AppRef) {
         if let Some(app) = NSRunningApplication::runningApplicationWithProcessIdentifier(pid) {
             app.activateWithOptions(NSApplicationActivationOptions::empty());
         }
@@ -871,9 +968,194 @@ mod platform {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(windows)]
+mod platform {
+    use std::path::Path;
+    use std::sync::atomic::{AtomicIsize, Ordering};
+    use std::time::Instant;
+    use tauri::{Manager, WebviewWindow};
+    use windows_sys::Win32::Foundation::{APPMODEL_ERROR_NO_PACKAGE, HWND, LPARAM, LRESULT, WPARAM};
+    use windows_sys::Win32::System::Shutdown::{ShutdownBlockReasonCreate, ShutdownBlockReasonDestroy};
+    use windows_sys::Win32::UI::Shell::{DefSubclassProc, SetWindowSubclass};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        DispatchMessageW, EnumThreadWindows, GetForegroundWindow, GetWindowLongPtrW, GetWindowThreadProcessId, PeekMessageW,
+        SetForegroundWindow, SetLayeredWindowAttributes, SetWindowLongPtrW, TranslateMessage, GWL_EXSTYLE, LWA_ALPHA, MSG,
+        PM_REMOVE, WM_ENDSESSION, WM_QUERYENDSESSION, WS_EX_LAYERED,
+    };
+
+    /// 빠른 입력창을 띄우기 전 앞에 있던 창(HWND)
+    pub type AppRef = isize;
+
+    static APP: std::sync::OnceLock<tauri::AppHandle> = std::sync::OnceLock::new();
+    static MAIN: AtomicIsize = AtomicIsize::new(0);
+    const SUBCLASS_ID: usize = 0x0041_5255;
+
+    fn with_hwnd(window: &WebviewWindow, f: impl FnOnce(HWND) + Send + 'static) -> tauri::Result<()> {
+        let window = window.clone();
+        window.clone().run_on_main_thread(move || {
+            if let Ok(hwnd) = window.hwnd() {
+                f(hwnd.0);
+            }
+        })
+    }
+
+    /// 로그아웃·종료 때 Windows는 최상위 창마다 WM_QUERYENDSESSION → WM_ENDSESSION을 보낸다.
+    /// tao는 자기 숨은 창에서 WM_ENDSESSION을 받자마자 process::exit(0)하고(tao 0.37 event_loop.rs), 창들이 받는 순서는 정해져 있지 않다.
+    /// 그래서 메인 창만이 아니라 이 스레드의 최상위 창을 모두 서브클래스해 어느 창이 먼저 받든 저장을 기다린다.
+    /// ⚠️ 실측 전: tao가 메시지를 먼저 소비하는지, Windows가 11초를 기다려 주는지는 VM에서 확인해야 한다
+    pub fn hook_terminate(app: tauri::AppHandle) {
+        use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+        if let Some(Ok(hwnd)) = app.get_webview_window("main").map(|w| w.hwnd()) {
+            MAIN.store(hwnd.0 as isize, Ordering::Relaxed);
+        }
+        let _ = APP.set(app);
+        unsafe extern "system" fn each(hwnd: HWND, _: LPARAM) -> windows_sys::core::BOOL {
+            unsafe { SetWindowSubclass(hwnd, Some(session_proc), SUBCLASS_ID, 0) };
+            1
+        }
+        unsafe { EnumThreadWindows(GetCurrentThreadId(), Some(each), 0) };
+    }
+
+    unsafe extern "system" fn session_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM, _: usize, _: usize) -> LRESULT {
+        let main = MAIN.load(Ordering::Relaxed) as HWND;
+        match msg {
+            WM_QUERYENDSESSION => {
+                unsafe { ShutdownBlockReasonCreate(main, windows_sys::core::w!("할 일을 저장하고 있어요")) };
+                if super::QUIT.begin(true) == super::Begin::Start
+                    && let Some(app) = APP.get()
+                {
+                    super::save_then_quit(app);
+                }
+                return 1;
+            }
+            WM_ENDSESSION => {
+                if wparam != 0 {
+                    wait_saved();
+                }
+                unsafe { ShutdownBlockReasonDestroy(main) };
+            }
+            _ => {}
+        }
+        unsafe { DefSubclassProc(hwnd, msg, wparam, lparam) }
+    }
+
+    /// WM_ENDSESSION에서 돌아가면 곧 프로세스가 끝난다. 화면의 저장 응답(quit_ready)이 이 스레드로 오므로 메시지를 돌리며 기다린다
+    fn wait_saved() {
+        let deadline = Instant::now() + super::QUIT_WAIT;
+        let mut msg: MSG = unsafe { std::mem::zeroed() };
+        while !super::QUIT.done() && Instant::now() < deadline {
+            while unsafe { PeekMessageW(&mut msg, std::ptr::null_mut(), 0, 0, PM_REMOVE) } != 0 {
+                unsafe {
+                    TranslateMessage(&msg);
+                    DispatchMessageW(&msg);
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
+    /// Windows는 답을 기다리지 않는다(WM_ENDSESSION에서 돌아가면 끝난다). finish_quit이 app.exit(0)하게 둔다
+    pub fn reply_terminate(_app: &tauri::AppHandle) -> bool {
+        false
+    }
+
+    /// ⚠️ 실측 전(설계 D6): WebView2가 layered 창에서 그려지는지 VM에서 확인해야 한다. 안 되면 투명도 설정을 숨긴다
+    pub fn set_opacity(window: &WebviewWindow, alpha: f64) -> tauri::Result<()> {
+        with_hwnd(window, move |hwnd| unsafe {
+            let style = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+            if alpha >= 1.0 {
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style & !(WS_EX_LAYERED as isize));
+            } else {
+                SetWindowLongPtrW(hwnd, GWL_EXSTYLE, style | WS_EX_LAYERED as isize);
+                SetLayeredWindowAttributes(hwnd, 0, (alpha * 255.0).round() as u8, LWA_ALPHA);
+            }
+        })
+    }
+
+    /// 창 장식은 설정(tauri.windows.conf.json, decorations: false)으로 끈다
+    pub fn hide_window_buttons(_window: &WebviewWindow) -> tauri::Result<()> {
+        Ok(())
+    }
+
+    /// 장식 없는 창은 Windows 11에서도 각진 모서리로 그려진다. Windows 10은 이 속성이 없어 실패하고 그대로 둔다
+    pub fn round_corners(window: &WebviewWindow) {
+        use windows_sys::Win32::Graphics::Dwm::{DwmSetWindowAttribute, DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND};
+        let _ = with_hwnd(window, |hwnd| unsafe {
+            let round = DWMWCP_ROUND;
+            DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_WINDOW_CORNER_PREFERENCE as u32,
+                &round as *const _ as *const _,
+                std::mem::size_of_val(&round) as u32,
+            );
+        });
+    }
+
+    /// 지금 앞에 있는 창(Aru 자신의 창은 빼고)
+    pub fn frontmost_other_app() -> Option<AppRef> {
+        use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+        let hwnd = unsafe { GetForegroundWindow() };
+        if hwnd.is_null() {
+            return None;
+        }
+        let mut pid = 0u32;
+        unsafe { GetWindowThreadProcessId(hwnd, &mut pid) };
+        (pid != unsafe { GetCurrentProcessId() }).then_some(hwnd as isize)
+    }
+
+    // 우리 창이 앞에 있을 때 부르므로 포그라운드 잠금에 걸리지 않는다
+    pub fn activate_app(hwnd: AppRef) {
+        unsafe { SetForegroundWindow(hwnd as HWND) };
+    }
+
+    /// 설치본 패키지(MSIX) 안에서 도는지
+    pub fn packaged() -> bool {
+        use windows_sys::Win32::Storage::Packaging::Appx::GetCurrentPackageFullName;
+        let mut len = 0u32;
+        unsafe { GetCurrentPackageFullName(&mut len, std::ptr::null_mut()) != APPMODEL_ERROR_NO_PACKAGE }
+    }
+
+    /// 깔려 있는 Claude 데스크톱 앱의 경로
+    pub fn claude_desktop() -> Option<String> {
+        let exe = crate::cli::local_app_data()?.join("AnthropicClaude").join("claude.exe");
+        exe.is_file().then(|| exe.to_string_lossy().into_owned())
+    }
+
+    pub fn open_with(file: &Path, app: &str) -> bool {
+        use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+        let wide = |s: &std::ffi::OsStr| {
+            use std::os::windows::ffi::OsStrExt;
+            s.encode_wide().chain(Some(0)).collect::<Vec<u16>>()
+        };
+        let (app, file) = (wide(app.as_ref()), wide(format!("\"{}\"", file.display()).as_ref()));
+        let open = wide("open".as_ref());
+        let result = unsafe {
+            ShellExecuteW(std::ptr::null_mut(), open.as_ptr(), app.as_ptr(), file.as_ptr(), std::ptr::null(), SW_SHOWNORMAL)
+        };
+        // 32 이하는 오류 코드다
+        result as isize > 32
+    }
+
+    /// GetVersionEx는 매니페스트에 OS를 적지 않은 앱에 버전을 낮춰 알려 준다. RtlGetVersion은 그러지 않는다
+    pub fn windows_version() -> String {
+        use windows_sys::Wdk::System::SystemServices::RtlGetVersion;
+        use windows_sys::Win32::System::SystemInformation::OSVERSIONINFOW;
+        let mut info: OSVERSIONINFOW = unsafe { std::mem::zeroed() };
+        info.dwOSVersionInfoSize = std::mem::size_of::<OSVERSIONINFOW>() as u32;
+        if unsafe { RtlGetVersion(&mut info) } == 0 {
+            super::windows_name(info.dwMajorVersion, info.dwBuildNumber)
+        } else {
+            "Windows".into()
+        }
+    }
+}
+
+#[cfg(not(any(target_os = "macos", windows)))]
 mod platform {
     use tauri::WebviewWindow;
+
+    pub type AppRef = i32;
 
     pub fn hook_terminate(_app: tauri::AppHandle) {}
 
@@ -889,11 +1171,13 @@ mod platform {
         Ok(())
     }
 
-    pub fn frontmost_other_app() -> Option<i32> {
+    pub fn round_corners(_window: &WebviewWindow) {}
+
+    pub fn frontmost_other_app() -> Option<AppRef> {
         None
     }
 
-    pub fn activate_app(_pid: i32) {}
+    pub fn activate_app(_pid: AppRef) {}
 
     pub fn claude_desktop() -> Option<String> {
         None
@@ -1245,6 +1529,50 @@ mod tests {
             let begin = dock.join().unwrap();
             assert!(matches!((&begin, &fin), (Begin::Joined, Some(Finish::Reply)) | (Begin::Done, Some(Finish::Exit))), "{begin:?} {fin:?}");
         }
+    }
+
+    #[test]
+    fn w4_화면에_os를_알린다() {
+        assert_eq!(serde_json::to_value(platform_info()).unwrap(), json!({"os": "macos"}));
+        assert_eq!(os_name("windows"), "windows");
+        assert_eq!(os_name("linux"), "linux");
+        assert_eq!(os_name("macos"), "macos");
+    }
+
+    #[test]
+    fn w5_ai_도구에_줄_aru_경로는_패키지면_실행_별칭_아니면_옆의_aru_cli다() {
+        let local = std::path::Path::new("/Users/나/AppData/Local");
+        let exe = std::path::Path::new("/Program Files/WindowsApps/dev.aruu.aru_0.2.8.0_x64__abc/aru.exe");
+        assert_eq!(cli_command_path(true, local, exe), local.join("Microsoft").join("WindowsApps").join("aru.exe"));
+        let dev = std::path::Path::new("/repo/src-tauri/target/debug/aru.exe");
+        assert_eq!(cli_command_path(false, local, dev), std::path::Path::new("/repo/src-tauri/target/debug/aru-cli.exe"));
+    }
+
+    #[test]
+    fn w6_windows_이름은_빌드_22000부터_11이다() {
+        assert_eq!(windows_name(10, 19045), "Windows 10 (19045)");
+        assert_eq!(windows_name(10, 21999), "Windows 10 (21999)");
+        assert_eq!(windows_name(10, 22000), "Windows 11 (22000)");
+        assert_eq!(windows_name(10, 26100), "Windows 11 (26100)");
+        assert_eq!(windows_name(6, 9600), "Windows NT 6 (9600)");
+    }
+
+    #[test]
+    fn w7_windows_설정의_메인_창은_기본_설정과_장식만_다르다() {
+        // tauri는 플랫폼 설정을 JSON Merge Patch로 합쳐 배열(app.windows)을 통째로 갈아 끼운다. 기본 설정을 고치면 여기도 맞춰야 한다
+        let base: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let win: serde_json::Value = serde_json::from_str(include_str!("../tauri.windows.conf.json")).unwrap();
+        let mut expected = base["app"]["windows"][0].clone();
+        let map = expected.as_object_mut().unwrap();
+        map.remove("titleBarStyle");
+        map.remove("hiddenTitle");
+        map.insert("decorations".into(), json!(false));
+        map.insert("shadow".into(), json!(true));
+        assert_eq!(win["app"]["windows"].as_array().unwrap().len(), 1);
+        assert_eq!(win["app"]["windows"][0], expected);
+        // 콘솔용 aru-cli는 이 기능이 켜져야 빌드된다(맥 앱 묶음에는 넣지 않는다)
+        assert_eq!(win["build"]["features"], json!(["windows-cli"]));
+        assert!(include_str!("../Cargo.toml").contains("required-features = [\"windows-cli\"]"));
     }
 
     #[test]

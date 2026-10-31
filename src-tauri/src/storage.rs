@@ -1,14 +1,14 @@
-use std::ffi::{CString, OsStr};
+use std::ffi::OsStr;
 use std::fs;
 use std::io::Write;
-use std::os::fd::{AsRawFd, FromRawFd};
-use std::os::unix::ffi::OsStrExt;
-use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::time::{Duration, Instant, SystemTime};
+
+mod sys;
+use sys::{open_lock, open_regular, rename_excl, volume_uuid};
 
 const LOCK_FILE: &str = ".aru.lock";
 /// location.json을 고치는 쪽(폴더 변경·초기화·낡은 bookmark 갱신)끼리 줄 세우는 잠금. 저장 폴더 잠금과 다른 이름이어야 한다 —
@@ -57,29 +57,6 @@ fn lock_named(dir: &Path, name: &str, place: &str, wait: Duration) -> Result<Roo
     acquire(file, place, wait, busy, |f| f.try_lock())
 }
 
-/// 잠금 파일을 연다. Err(None)은 링크·FIFO 같은 쓸 수 없는 종류라는 뜻이다.
-/// O_NOFOLLOW: 링크를 따라가면 저장 폴더 밖에 파일을 만든다. O_NONBLOCK: FIFO는 상대가 열 때까지 open에서 멈춘다(대기 시간이 소용없다)
-fn open_lock(path: &Path) -> Result<fs::File, Option<std::io::Error>> {
-    let flags = libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC;
-    // flock은 읽기 전용으로 연 파일이나 폴더에도 걸린다. 잠금 파일이 읽기 전용이 됐거나 같은 이름의 폴더가 생겨도
-    // 쓰기로 못 연다는 이유만으로 모든 저장을 막지 않는다
-    let file = match fs::OpenOptions::new().create(true).truncate(false).write(true).custom_flags(flags).open(path) {
-        Ok(file) => file,
-        Err(e) => match fs::OpenOptions::new().read(true).custom_flags(flags).open(path) {
-            Ok(file) => file,
-            Err(_) if fs::symlink_metadata(path).is_ok_and(|m| !m.is_file() && !m.is_dir()) => return Err(None),
-            // 같은 이름의 폴더면 쓰기로 열 때의 EISDIR이 아니라 읽기로 열 때의 오류(권한 등)가 진짜 원인이다
-            Err(read) if e.raw_os_error() == Some(libc::EISDIR) => return Err(Some(read)),
-            Err(_) => return Err(Some(e)),
-        },
-    };
-    match file.metadata() {
-        Ok(m) if m.is_file() || m.is_dir() => Ok(file),
-        Ok(_) => Err(None),
-        Err(e) => Err(Some(e)),
-    }
-}
-
 /// 폴더를 바꾸는 쪽(set_data_root)은 옛 폴더의 잠금을 쥔 채 location.json을 고친다. 그 잠금을 기다리던 저장이
 /// 풀리자마자 옛 폴더에 쓰지 않게, 잡은 뒤 저장 폴더를 다시 확인하고 바뀌었으면 새 폴더로 다시 잡는다
 pub fn lock_current(resolve: impl Fn() -> Result<PathBuf, String>, wait: Duration) -> Result<(PathBuf, RootLock), String> {
@@ -115,17 +92,12 @@ fn acquire(
             Ok(()) => return Ok(RootLock(Some(file))),
             // 잠금 데몬 없는 NFS·일부 SMB·macFUSE(Cryptomator 등)는 flock을 거부한다.
             // 잠금 때문에 저장이 전부 막히는 것보다, 잠그지 않고 예전처럼 쓰는 편이 낫다(동시 쓰기 보호만 빠진다)
-            Err(fs::TryLockError::Error(e)) if lock_unsupported(&e) => return Ok(RootLock(None)),
+            Err(fs::TryLockError::Error(e)) if sys::lock_unsupported(&e) => return Ok(RootLock(None)),
             Err(fs::TryLockError::Error(e)) => return Err(format!("{place}에 쓸 수 없어요: {}", io_message(&e))),
             Err(fs::TryLockError::WouldBlock) if Instant::now() >= deadline => return Err(busy()),
             Err(fs::TryLockError::WouldBlock) => std::thread::sleep(Duration::from_millis(20)),
         }
     }
-}
-
-fn lock_unsupported(e: &std::io::Error) -> bool {
-    e.kind() == std::io::ErrorKind::Unsupported
-        || e.raw_os_error().is_some_and(|code| code == libc::ENOTSUP || code == libc::EOPNOTSUPP || code == libc::ENOLCK)
 }
 
 pub fn read_text(root: &Path, rel: &str) -> Result<Option<String>, String> {
@@ -162,55 +134,34 @@ const READ_TRIES: u32 = 50;
 /// 대신 연 파일의 크기·수정 시각·inode 변경 시각을 읽기 앞뒤로 비교해, 그 사이 바뀌었거나 읽은 길이가 크기와 다르면 다시 읽는다.
 /// 우리 쓰기는 빈 내용이면 파일을 지우므로, 하드링크 파일이 비어 보이면 잘라 낸 직후(truncate와 write 사이)일 수 있어 한 번 더 본다
 fn read_settled(path: &Path) -> std::io::Result<Option<Vec<u8>>> {
-    let stamp = |m: &fs::Metadata| (m.len(), m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec());
     let mut last = None;
     for _ in 0..READ_TRIES {
         let Some(mut file) = open_regular(path)? else { return Ok(None) };
-        let before = file.metadata()?;
-        let bytes = read_capped(&mut file, before.len())?;
-        let after = file.metadata()?;
-        let settled = stamp(&before) == stamp(&after) && bytes.len() as u64 == after.len();
-        if settled && !(bytes.is_empty() && after.nlink() > 1) {
+        let before = sys::stamp(&file)?;
+        let bytes = read_capped(&mut file, before.len)?;
+        let after = sys::stamp(&file)?;
+        let settled = before.same(&after) && bytes.len() as u64 == after.len;
+        if settled && !(bytes.is_empty() && after.links > 1) {
             return Ok(Some(bytes));
         }
         last = settled.then_some(bytes);
         std::thread::sleep(Duration::from_millis(2));
     }
     // 정말 빈 하드링크 파일이면 여기까지 온다. 계속 바뀌기만 하면 잘린 내용을 주느니 실패로 알린다
-    last.map(Some).ok_or_else(|| std::io::Error::from_raw_os_error(libc::EAGAIN))
+    last.map(Some).ok_or_else(|| std::io::Error::from_raw_os_error(sys::EAGAIN))
 }
 
 /// 할 일·설정 파일로 볼 수 있는 크기의 상한. 크기만큼 미리 잡으면 거대한 희소 파일에서 할당이 실패해 프로세스가 죽는다
 pub const MAX_READ: u64 = 64 * 1024 * 1024;
 
-/// 일반 파일만 연다(사용자 심링크는 따라간다). FIFO는 open·read에서 끝없이 멈추고(잠금을 쥔 채 멈출 수 있다), 장치(/dev/zero)는 끝이 없다.
-/// 미리 본 종류와 연 뒤의 종류를 둘 다 본다 — 소켓은 open이 엉뚱한 오류를 내고, 그 사이 FIFO로 바뀔 수도 있다
-fn open_regular(path: &Path) -> std::io::Result<Option<fs::File>> {
-    let special = |m: &fs::Metadata| std::io::Error::from_raw_os_error(if m.is_dir() { libc::EISDIR } else { libc::ESPIPE });
-    let opened = match fs::metadata(path) {
-        Ok(m) if !m.is_file() => return Err(special(&m)),
-        Ok(_) => fs::OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC).open(path),
-        Err(e) => Err(e),
-    };
-    let file = match opened {
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(None),
-        r => r?,
-    };
-    let meta = file.metadata()?;
-    if !meta.is_file() {
-        return Err(special(&meta));
-    }
-    Ok(Some(file))
-}
-
 fn read_capped(file: &mut fs::File, size: u64) -> std::io::Result<Vec<u8>> {
     use std::io::Read;
-    let too_big = || std::io::Error::from_raw_os_error(libc::EFBIG);
+    let too_big = || std::io::Error::from_raw_os_error(sys::EFBIG);
     if size > MAX_READ {
         return Err(too_big());
     }
     let mut bytes = Vec::new();
-    bytes.try_reserve_exact(size as usize).map_err(|_| std::io::Error::from_raw_os_error(libc::ENOMEM))?;
+    bytes.try_reserve_exact(size as usize).map_err(|_| std::io::Error::from_raw_os_error(sys::ENOMEM))?;
     // 크기 확인 뒤에 늘어난 파일도 상한에서 멈춘다
     file.take(MAX_READ + 1).read_to_end(&mut bytes)?;
     if bytes.len() as u64 > MAX_READ {
@@ -286,7 +237,7 @@ pub fn write_atomic(path: &Path, content: &str) -> Result<(), String> {
 /// 사용자가 일부러 읽기 전용으로 둔 파일이다. 이름을 바꿔 교체하면 권한과 상관없이 써져 버린다
 fn refuse_read_only(path: &Path, meta: &fs::Metadata) -> Result<(), String> {
     if meta.is_file() && meta.permissions().readonly() {
-        return Err(format!("저장하지 못했어요: 읽기 전용 파일이에요. Finder에서 쓰기 권한을 주면 다시 저장해요 ({})", path.display()));
+        return Err(format!("저장하지 못했어요: 읽기 전용 파일이에요. {} 다시 저장해요 ({})", sys::READ_ONLY_FIX, path.display()));
     }
     Ok(())
 }
@@ -302,7 +253,7 @@ fn write_file(path: &Path, content: &str, make_parent: bool) -> Result<(), Strin
         refuse_read_only(path, meta)?;
         // 하드링크로 묶인 파일은 이름을 바꿔 교체하면 다른 쪽 이름이 옛 내용에 남는다(백업·다른 앱과 갈라진다).
         // 원자성보다 링크를 지키는 쪽을 택해 제자리에 쓴다
-        if meta.is_file() && meta.nlink() > 1 {
+        if meta.is_file() && sys::links(path, meta) > 1 {
             return write_in_place(path, content);
         }
     }
@@ -319,7 +270,7 @@ fn replace_via_temp(
     keep: Option<(&Path, &fs::Metadata)>,
     only_new: bool,
 ) -> std::io::Result<()> {
-    let dir = fs::File::open(parent)?;
+    let dir = sys::Dir::open(parent)?;
     let (tmp, mut file) = create_temp(&dir, name)?;
     let written = (|| {
         fill(&mut file)?;
@@ -329,16 +280,12 @@ fn replace_via_temp(
         file.sync_all()?;
         drop(file);
         if only_new && fs::symlink_metadata(parent.join(name)).is_ok() {
-            return Err(std::io::Error::from_raw_os_error(libc::EEXIST));
+            return Err(std::io::Error::from_raw_os_error(sys::EEXIST));
         }
-        let to = CString::new(name.as_bytes())?;
-        if unsafe { libc::renameat(dir.as_raw_fd(), tmp.as_ptr(), dir.as_raw_fd(), to.as_ptr()) } != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        Ok(())
+        dir.rename_in(&tmp, name)
     })();
     if written.is_err() {
-        unsafe { libc::unlinkat(dir.as_raw_fd(), tmp.as_ptr(), 0) };
+        let _ = dir.unlink_in(&tmp);
     }
     written
 }
@@ -361,12 +308,7 @@ fn keep_metadata(original: &Path, meta: &fs::Metadata, tmp: &fs::File) {
     if !meta.is_file() {
         return;
     }
-    #[cfg(target_os = "macos")]
-    if let Ok(src) = fs::OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK | libc::O_CLOEXEC).open(original) {
-        unsafe { libc::fcopyfile(src.as_raw_fd(), tmp.as_raw_fd(), std::ptr::null_mut(), libc::COPYFILE_ACL | libc::COPYFILE_XATTR) };
-    }
-    #[cfg(not(target_os = "macos"))]
-    let _ = original;
+    sys::copy_meta(original, meta, tmp);
     let _ = tmp.set_permissions(meta.permissions());
 }
 
@@ -393,27 +335,20 @@ const TEMP_PREFIX: &str = ".aru-tmp-";
 
 /// `.aru-tmp-{pid}-{순번}.{이름 앞 32바이트}.tmp`. 폴더 기준으로 만들어 길이는 이름 한도(255)만 따진다.
 /// O_EXCL·O_NOFOLLOW라 같은 이름이 있으면 덮지 않고 다음 순번으로 넘어간다
-fn create_temp(dir: &fs::File, name: &OsStr) -> std::io::Result<(CString, fs::File)> {
+fn create_temp(dir: &sys::Dir, name: &OsStr) -> std::io::Result<(String, fs::File)> {
     static SEQ: AtomicU64 = AtomicU64::new(0);
-    let bytes = name.as_bytes();
-    let mut cut = bytes.len().min(32);
-    while cut > 0 && cut < bytes.len() && bytes[cut] & 0xc0 == 0x80 {
+    let name = name.to_string_lossy();
+    let mut cut = name.len().min(32);
+    while !name.is_char_boundary(cut) {
         cut -= 1;
     }
     loop {
         let token = format!("{}-{}", base36(std::process::id() as u64), base36(SEQ.fetch_add(1, Ordering::Relaxed)));
-        let mut tmp = format!("{TEMP_PREFIX}{token}.").into_bytes();
-        tmp.extend_from_slice(&bytes[..cut]);
-        tmp.extend_from_slice(b".tmp");
-        let tmp = CString::new(tmp)?;
-        let flags = libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC;
-        let fd = unsafe { libc::openat(dir.as_raw_fd(), tmp.as_ptr(), flags, 0o666 as libc::c_uint) };
-        if fd >= 0 {
-            return Ok((tmp, unsafe { fs::File::from_raw_fd(fd) }));
-        }
-        let e = std::io::Error::last_os_error();
-        if e.raw_os_error() != Some(libc::EEXIST) {
-            return Err(e);
+        let tmp = format!("{TEMP_PREFIX}{token}.{}.tmp", &name[..cut]);
+        match dir.create_new(&tmp) {
+            Ok(file) => return Ok((tmp, file)),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => return Err(e),
         }
     }
 }
@@ -634,7 +569,7 @@ fn read_marker(marker: &Path) -> Result<Option<Marker>, String> {
             ))
         }
         Ok(_) => match read_file(marker) {
-            Err(e) if e.raw_os_error() == Some(libc::EFBIG) => return Ok(Some(Marker::default())),
+            Err(e) if e.raw_os_error() == Some(sys::EFBIG) => return Ok(Some(Marker::default())),
             r => r.map_err(failed)?,
         },
     };
@@ -686,46 +621,19 @@ fn saved_source_id(from: &Path) -> Option<String> {
 /// 다른 맥과 우연히 같을 수는 있지만 둘 다 아이디를 못 남긴 때뿐이다. 기기 식별값이 동기화 폴더에 올라가지 않게 해시로만 남긴다
 fn folder_id(from: &Path) -> Option<String> {
     let m = fs::metadata(from).ok()?;
+    let (dev, ino) = sys::file_id(from, &m)?;
     let key = match volume_uuid(from) {
-        Some(uuid) => [uuid.as_slice(), &m.ino().to_le_bytes()].concat(),
-        None => format!("dev:{:x}:{:x}", m.dev(), m.ino()).into_bytes(),
+        Some(uuid) => [uuid.as_slice(), &ino.to_le_bytes()].concat(),
+        None => format!("dev:{:x}:{:x}", dev, ino).into_bytes(),
     };
     Some(format!("{:x}", Sha256::digest(&key))[..32].to_string())
-}
-
-/// 볼륨 UUID. 없으면(0) None
-#[cfg(target_os = "macos")]
-fn volume_uuid(path: &Path) -> Option<[u8; 16]> {
-    let c = CString::new(path.as_os_str().as_bytes()).ok()?;
-    let mut st: libc::statfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statfs(c.as_ptr(), &mut st) } != 0 {
-        return None;
-    }
-    let mount = unsafe { std::ffi::CStr::from_ptr(st.f_mntonname.as_ptr()) };
-    let mut list: libc::attrlist = unsafe { std::mem::zeroed() };
-    list.bitmapcount = libc::ATTR_BIT_MAP_COUNT;
-    list.volattr = libc::ATTR_VOL_INFO | libc::ATTR_VOL_UUID;
-    #[repr(C)]
-    struct Reply {
-        len: u32,
-        uuid: [u8; 16],
-    }
-    let mut reply = Reply { len: 0, uuid: [0; 16] };
-    // 볼륨 속성은 볼륨의 맨 위 폴더에 물어야 한다
-    let r = unsafe { libc::getattrlist(mount.as_ptr(), (&raw mut list).cast(), (&raw mut reply).cast(), size_of::<Reply>(), 0) };
-    (r == 0 && reply.len as usize >= size_of::<Reply>() && reply.uuid != [0; 16]).then_some(reply.uuid)
-}
-
-#[cfg(not(target_os = "macos"))]
-fn volume_uuid(_: &Path) -> Option<[u8; 16]> {
-    None
 }
 
 /// 아이디를 못 남기면(읽기 전용 등) 폴더 자체로 만든 대신 아이디를 쓴다(source_id와 같은 값)
 fn ensure_source_id(from: &Path) -> String {
     saved_source_id(from).unwrap_or_else(|| {
         let mut bytes = [0u8; 16];
-        if unsafe { libc::getentropy(bytes.as_mut_ptr().cast(), bytes.len()) } != 0 {
+        if !sys::random_bytes(&mut bytes) {
             let nanos = SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
             bytes = (nanos ^ (std::process::id() as u128) << 64).to_le_bytes();
         }
@@ -740,13 +648,13 @@ fn ensure_source_id(from: &Path) -> String {
 /// 새 폴더와 그 daily를 링크를 따라가지 않고 연 것, 그리고 그 안의 표지 이름 모양 항목(someday.md·settings.json·daily/*.md).
 /// 확인한 뒤 daily가 링크로 바뀌어도 그 너머를 지우지 않게, 지우기는 연 폴더 안에서만 한다
 struct Opened {
-    top: fs::File,
-    daily: Option<fs::File>,
+    top: sys::Dir,
+    daily: Option<sys::Dir>,
     names: Vec<String>,
 }
 
 impl Opened {
-    fn at<'a>(&'a self, rel: &'a str) -> Option<(&'a fs::File, &'a str)> {
+    fn at<'a>(&'a self, rel: &'a str) -> Option<(&'a sys::Dir, &'a str)> {
         match rel.strip_prefix("daily/") {
             Some(name) => self.daily.as_ref().map(|d| (d, name)),
             None => Some((&self.top, rel)),
@@ -756,14 +664,14 @@ impl Opened {
 
 fn open_target(to: &Path) -> Result<Opened, String> {
     let failed = |e: std::io::Error, rel: &str| format!("할 일을 새 폴더로 옮기지 못했어요: {} ({rel})", io_message(&e));
-    let top = open_dir_nofollow(to, None).map_err(|e| failed(e, "."))?;
-    let daily = match open_dir_nofollow(to, Some((&top, "daily"))) {
+    let top = sys::open_dir_nofollow(to, None).map_err(|e| failed(e, "."))?;
+    let daily = match sys::open_dir_nofollow(to, Some((&top, "daily"))) {
         Ok(d) => Some(d),
-        Err(e) if e.raw_os_error() == Some(libc::ENOENT) => None,
-        Err(e) if matches!(e.raw_os_error(), Some(libc::ELOOP | libc::ENOTDIR)) => {
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(e) if matches!(e.raw_os_error(), Some(sys::ELOOP | sys::ENOTDIR)) => {
             return Err("할 일을 새 폴더로 옮기지 못했어요: 새 폴더의 daily가 링크나 파일이에요. 그 항목을 치우고 다시 시도해 주세요 (daily)".into())
         }
-        Err(e) => return Err(failed(std::io::Error::from_raw_os_error(e.raw_os_error().unwrap_or(libc::EIO)), "daily")),
+        Err(e) => return Err(failed(std::io::Error::from_raw_os_error(e.raw_os_error().unwrap_or(sys::EIO)), "daily")),
     };
     let mut names: Vec<String> = ["someday.md", "settings.json"].into_iter().filter(|n| fs::symlink_metadata(to.join(n)).is_ok()).map(String::from).collect();
     if daily.is_some() {
@@ -778,13 +686,8 @@ fn open_target(to: &Path) -> Result<Opened, String> {
 }
 
 /// 일반 파일이고 크기·내용이 적어 둔 것과 같은가. 링크는 따라가지 않는다
-fn same_in(dir: &fs::File, name: &str, e: &Entry) -> bool {
-    let Ok(c) = CString::new(name) else { return false };
-    let fd = unsafe { libc::openat(dir.as_raw_fd(), c.as_ptr(), libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC) };
-    if fd < 0 {
-        return false;
-    }
-    let mut file = unsafe { fs::File::from_raw_fd(fd) };
+fn same_in(dir: &sys::Dir, name: &str, e: &Entry) -> bool {
+    let Ok(mut file) = dir.open_in(name) else { return false };
     file.metadata().is_ok_and(|m| m.is_file() && m.len() == e.size) && digest(&mut file, |_| Ok(())).is_ok_and(|(size, sha)| size == e.size && sha == e.sha256)
 }
 
@@ -817,7 +720,7 @@ fn remove_ours(to: &Path, entries: &[Entry]) -> Result<(), String> {
     for rel in &t.names {
         let (Some(e), Some((dir, name))) = (listed.get(rel.as_str()), t.at(rel)) else { continue };
         if same_in(dir, name, e) {
-            unlink_in(dir, name).map_err(|x| format!("할 일을 새 폴더로 옮기지 못했어요: {} ({rel})", io_message(&x)))?;
+            dir.unlink_in(name).map_err(|x| format!("할 일을 새 폴더로 옮기지 못했어요: {} ({rel})", io_message(&x)))?;
         }
     }
     Ok(())
@@ -832,47 +735,11 @@ fn remove_temps(to: &Path) -> Result<(), String> {
         for entry in fs::read_dir(path).into_iter().flatten().flatten() {
             let name = entry.file_name();
             if is_our_temp(&name.to_string_lossy()) && entry.file_type().is_ok_and(|t| t.is_file()) {
-                let _ = unlink_in(dir, &name.to_string_lossy());
+                let _ = dir.unlink_in(&name.to_string_lossy());
             }
         }
     }
     Ok(())
-}
-
-/// parent가 있으면 그 폴더 안의 name을, 없으면 path를 링크를 따라가지 않고 폴더로 연다
-fn open_dir_nofollow(path: &Path, parent: Option<(&fs::File, &str)>) -> std::io::Result<fs::File> {
-    let flags = libc::O_RDONLY | libc::O_DIRECTORY | libc::O_CLOEXEC;
-    let fd = match parent {
-        Some((dir, name)) => {
-            let name = CString::new(name)?;
-            unsafe { libc::openat(dir.as_raw_fd(), name.as_ptr(), flags | libc::O_NOFOLLOW) }
-        }
-        // 저장 폴더 자체는 사용자가 고른 것이라 링크여도 따라간다
-        None => {
-            let path = CString::new(path.as_os_str().as_bytes())?;
-            unsafe { libc::open(path.as_ptr(), flags) }
-        }
-    };
-    if fd < 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    Ok(unsafe { fs::File::from_raw_fd(fd) })
-}
-
-/// 없으면 성공. 같은 이름의 폴더는 macOS가 EPERM(권한)으로 답해 문구가 틀리므로 EISDIR로 바꾼다
-fn unlink_in(dir: &fs::File, name: &str) -> std::io::Result<()> {
-    let c = CString::new(name)?;
-    if unsafe { libc::unlinkat(dir.as_raw_fd(), c.as_ptr(), 0) } == 0 {
-        return Ok(());
-    }
-    let e = std::io::Error::last_os_error();
-    let mut st: libc::stat = unsafe { std::mem::zeroed() };
-    let is_dir = unsafe { libc::fstatat(dir.as_raw_fd(), c.as_ptr(), &mut st, libc::AT_SYMLINK_NOFOLLOW) } == 0 && (st.st_mode & libc::S_IFMT) == libc::S_IFDIR;
-    match e.raw_os_error() {
-        Some(libc::ENOENT) => Ok(()),
-        Some(libc::EPERM) if is_dir => Err(std::io::Error::from_raw_os_error(libc::EISDIR)),
-        _ => Err(e),
-    }
 }
 
 /// 이번에 새 폴더에 둔 것. 되돌릴 때 이것만 지우고, daily는 우리가 만들었고 비었을 때만 지운다 —
@@ -970,7 +837,7 @@ fn name_is_dir(p: &Path) -> bool {
 fn rename_new(src: &Path, dst: &Path, rename_excl: fn(&Path, &Path) -> std::io::Result<()>) -> std::io::Result<()> {
     match rename_excl(src, dst) {
         // exFAT·SMB·NFS는 RENAME_EXCL을 모른다(ENOTSUP). 확인하고 이름을 바꾸면 그 사이 생긴 같은 이름을 덮으므로 복사로 둔다
-        Err(e) if e.raw_os_error().is_some_and(|c| c == libc::ENOTSUP || c == libc::EOPNOTSUPP) => copy_new(src, dst),
+        Err(e) if sys::is_notsup(&e) => copy_new(src, dst),
         r => r,
     }
 }
@@ -982,25 +849,6 @@ fn rename_new(src: &Path, dst: &Path, rename_excl: fn(&Path, &Path) -> std::io::
 fn copy_new(src: &Path, dst: &Path) -> std::io::Result<()> {
     let (Some(parent), Some(name)) = (dst.parent(), dst.file_name()) else { return Err(std::io::ErrorKind::InvalidInput.into()) };
     replace_via_temp(parent, name, |f| std::io::copy(&mut fs::File::open(src)?, f).map(|_| ()), None, true)
-}
-
-/// 그 사이 같은 이름이 생겼으면 덮지 않고 실패한다(빈 폴더도 rename으로는 덮여 버린다)
-fn rename_excl(src: &Path, dst: &Path) -> std::io::Result<()> {
-    #[cfg(target_os = "macos")]
-    {
-        let (s, d) = (CString::new(src.as_os_str().as_bytes())?, CString::new(dst.as_os_str().as_bytes())?);
-        if unsafe { libc::renamex_np(s.as_ptr(), d.as_ptr(), libc::RENAME_EXCL) } != 0 {
-            return Err(std::io::Error::last_os_error());
-        }
-        Ok(())
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        if fs::symlink_metadata(dst).is_ok() {
-            return Err(std::io::Error::from_raw_os_error(libc::EEXIST));
-        }
-        fs::rename(src, dst)
-    }
 }
 
 /// 앱 ID가 바뀌면 데이터 폴더 이름도 바뀐다. 새 폴더가 아직 없을 때만 옛 폴더를 통째로 옮긴다
@@ -1021,30 +869,34 @@ pub const UNDECODABLE: &str = "글자로 풀 수 없는 파일이에요 (UTF-8�
 /// 앱 화면과 aru 명령에 그대로 보이는 말. 영문 OS 오류(`Permission denied (os error 13)`)를 보여 주지 않는다
 pub fn io_message(e: &std::io::Error) -> String {
     use std::io::ErrorKind;
-    let text = match e.raw_os_error() {
-        Some(libc::EACCES | libc::EPERM) => "권한이 없어요",
-        Some(libc::EROFS) => "읽기 전용 디스크예요",
-        Some(libc::ENOSPC) => "디스크 공간이 부족해요",
-        Some(libc::EDQUOT) => "저장 공간 한도를 넘었어요",
-        Some(libc::ENAMETOOLONG) => "폴더나 파일 이름이 너무 길어요",
-        Some(libc::EILSEQ) => "이 디스크에 쓸 수 없는 글자가 이름에 있어요",
-        Some(libc::ENOENT) => "폴더나 파일을 찾을 수 없어요",
-        Some(libc::ENOTDIR) => "폴더가 있어야 할 자리에 파일이 있어요",
-        Some(libc::EISDIR) => "파일이 있어야 할 자리에 폴더가 있어요",
-        Some(libc::EEXIST) => "같은 이름이 이미 있어요",
-        Some(libc::EBUSY | libc::ETXTBSY) => "다른 프로그램이 쓰고 있어요",
-        Some(libc::EIO) => "디스크를 읽고 쓰다 문제가 생겼어요",
-        Some(libc::ENXIO | libc::ENODEV | libc::ENOTCONN | libc::ETIMEDOUT | libc::ENETDOWN | libc::ENETUNREACH | libc::EHOSTDOWN | libc::EHOSTUNREACH | libc::ESTALE) => {
-            "디스크나 네트워크 폴더와 연결이 끊겼어요"
-        }
-        Some(libc::ELOOP) => "심링크가 너무 여러 번 이어져 있어요",
-        Some(libc::EMFILE | libc::ENFILE) => "열린 파일이 너무 많아요. 잠시 뒤 다시 시도해 주세요",
-        Some(libc::ENOTSUP | libc::EOPNOTSUPP) => "이 디스크에서는 할 수 없는 작업이에요",
-        Some(libc::EFBIG) => "파일이 너무 커요 (64MB가 넘는 파일은 읽지 않아요)",
-        Some(libc::ESPIPE) => "일반 파일이 아니에요 (파이프·장치 같은 특수 파일이에요)",
-        Some(libc::EAGAIN | libc::EINTR) => "잠깐 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요",
+    let text = match e.raw_os_error().map(|code| (code, sys::os_error(code))) {
+        Some((_, Some(kind))) => match kind {
+            OsErr::Denied => "권한이 없어요",
+            OsErr::ReadOnlyDisk => "읽기 전용 디스크예요",
+            OsErr::NoSpace => "디스크 공간이 부족해요",
+            OsErr::Quota => "저장 공간 한도를 넘었어요",
+            OsErr::NameTooLong => "폴더나 파일 이름이 너무 길어요",
+            OsErr::BadName => "이 디스크에 쓸 수 없는 글자가 이름에 있어요",
+            OsErr::NotFound => "폴더나 파일을 찾을 수 없어요",
+            OsErr::NotDir => "폴더가 있어야 할 자리에 파일이 있어요",
+            OsErr::IsDir => "파일이 있어야 할 자리에 폴더가 있어요",
+            OsErr::Exists => "같은 이름이 이미 있어요",
+            OsErr::Busy => "다른 프로그램이 쓰고 있어요",
+            OsErr::Io => "디스크를 읽고 쓰다 문제가 생겼어요",
+            OsErr::Disconnected => "디스크나 네트워크 폴더와 연결이 끊겼어요",
+            OsErr::Loop => "심링크가 너무 여러 번 이어져 있어요",
+            OsErr::TooManyOpen => "열린 파일이 너무 많아요. 잠시 뒤 다시 시도해 주세요",
+            OsErr::NotSupported => "이 디스크에서는 할 수 없는 작업이에요",
+            OsErr::TooBig => "파일이 너무 커요 (64MB가 넘는 파일은 읽지 않아요)",
+            OsErr::Special => "일반 파일이 아니에요 (파이프·장치 같은 특수 파일이에요)",
+            OsErr::Again => "잠깐 처리하지 못했어요. 잠시 뒤 다시 시도해 주세요",
+            #[cfg(windows)]
+            OsErr::InUse => "다른 프로그램이 이 파일을 쓰는 중이에요",
+            #[cfg(windows)]
+            OsErr::NotEmpty => "폴더가 비어 있지 않아요",
+        },
         // 오류 번호는 남겨 둔다. 사용자가 "의견 보내기"로 알려 줄 때 원인을 찾을 수 있게
-        Some(code) => return format!("알 수 없는 문제가 생겼어요 (오류 {code})"),
+        Some((code, None)) => return format!("알 수 없는 문제가 생겼어요 (오류 {code})"),
         None => match e.kind() {
             ErrorKind::InvalidData => UNDECODABLE,
             ErrorKind::PermissionDenied => "권한이 없어요",
@@ -1055,6 +907,33 @@ pub fn io_message(e: &std::io::Error) -> String {
         },
     };
     text.to_string()
+}
+
+/// 같은 뜻의 OS 오류는 어느 OS에서든 같은 말로 알린다. 번호를 뜻으로 옮기는 표는 sys에 있다
+enum OsErr {
+    Denied,
+    ReadOnlyDisk,
+    NoSpace,
+    Quota,
+    NameTooLong,
+    BadName,
+    NotFound,
+    NotDir,
+    IsDir,
+    Exists,
+    Busy,
+    Io,
+    Disconnected,
+    Loop,
+    TooManyOpen,
+    NotSupported,
+    TooBig,
+    Special,
+    Again,
+    #[cfg(windows)]
+    InUse,
+    #[cfg(windows)]
+    NotEmpty,
 }
 
 fn write_error(e: std::io::Error) -> String {
@@ -1069,7 +948,7 @@ fn check_writable(dir: &Path) -> std::io::Result<()> {
     static SEQ: AtomicU64 = AtomicU64::new(0);
     loop {
         let probe = dir.join(format!("{PROBE_FILE}-{}-{}", base36(std::process::id() as u64), base36(SEQ.fetch_add(1, Ordering::Relaxed))));
-        match fs::OpenOptions::new().write(true).create_new(true).custom_flags(libc::O_NOFOLLOW).open(&probe) {
+        match sys::no_follow(fs::OpenOptions::new().write(true).create_new(true)).open(&probe) {
             Ok(mut file) => {
                 let written = file.write_all(b"aru");
                 drop(file);
@@ -1120,6 +999,10 @@ pub fn prepare_new_root(current: Option<&Path>, target: &Path, commit: impl FnOn
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[cfg(unix)]
+    use std::ffi::CString;
+    #[cfg(unix)]
+    use std::os::unix::{ffi::OsStrExt, fs::MetadataExt};
 
     fn prepare_new_root(current: Option<&Path>, target: &Path) -> Result<Prepared, String> {
         super::prepare_new_root(current, target, || Ok(()))

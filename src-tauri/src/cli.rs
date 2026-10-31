@@ -353,9 +353,22 @@ pub fn sanitize_tool(name: &str) -> String {
 }
 
 /// 이 맥의 시간대(TZ 포함) 기준 오늘. 외부 `date` 명령은 PATH·로캘에 따라 없거나 다른 모양을 내서 쓰지 않는다
+#[cfg(not(windows))]
 pub fn today() -> String {
     let now = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs() as i64).unwrap_or(0);
     local_date(now)
+}
+
+/// Windows 설정의 시간대 기준 오늘. CRT의 TZ 환경 변수는 서식·의미가 달라(`KST-9`) 지원하지 않는다
+#[cfg(windows)]
+pub fn today() -> String {
+    let t = win::local_time();
+    systemtime_date(t.wYear, t.wMonth, t.wDay)
+}
+
+#[cfg(any(windows, test))]
+fn systemtime_date(year: u16, month: u16, day: u16) -> String {
+    format!("{year:04}-{month:02}-{day:02}")
 }
 
 #[cfg(unix)]
@@ -364,6 +377,7 @@ unsafe extern "C" {
     fn tzset();
 }
 
+#[cfg(not(windows))]
 pub(crate) fn local_date(secs: i64) -> String {
     #[cfg(unix)]
     {
@@ -380,6 +394,7 @@ pub(crate) fn local_date(secs: i64) -> String {
     utc_date(secs)
 }
 
+#[cfg(not(windows))]
 fn utc_date(secs: i64) -> String {
     let z = secs.div_euclid(86_400) + 719_468;
     let era = z.div_euclid(146_097);
@@ -438,12 +453,19 @@ fn passwd_home() -> Option<PathBuf> {
     Some(PathBuf::from(std::ffi::OsStr::from_bytes(dir.to_bytes())))
 }
 
-#[cfg(not(unix))]
+/// Windows에는 passwd가 없다. 계정의 프로필 폴더를 쓴다
+#[cfg(windows)]
+fn passwd_home() -> Option<PathBuf> {
+    win::known_folder(&windows_sys::Win32::UI::Shell::FOLDERID_Profile)
+}
+
+#[cfg(not(any(unix, windows)))]
 fn passwd_home() -> Option<PathBuf> {
     None
 }
 
 /// 샌드박스 컨테이너 홈(`…/Library/Containers/{앱}/Data`)일 때만 받는다
+#[cfg(any(target_os = "macos", test))]
 fn container_home(p: PathBuf) -> Option<PathBuf> {
     (p.is_absolute() && p.ends_with("Data") && p.parent()?.parent()?.ends_with("Library/Containers")).then_some(p)
 }
@@ -461,24 +483,99 @@ fn sandbox_home() -> Option<PathBuf> {
     None
 }
 
+// Windows에서는 HOME을 읽지 않는다. Git Bash·MSYS가 `/c/Users/x` 꼴로 넣어 두는 값이라 받으면 엉뚱한 곳에 쓴다
+#[cfg(windows)]
+const HOME_VAR: &str = "USERPROFILE";
+#[cfg(not(windows))]
+const HOME_VAR: &str = "HOME";
+
 fn home() -> Result<PathBuf, String> {
     if let Some(container) = sandbox_home() {
         return Ok(container);
     }
-    resolve_home(std::env::var_os("HOME"), passwd_home).ok_or_else(|| "홈 폴더를 찾을 수 없다(HOME이 비어 있다). HOME을 지정하고 다시 실행해 달라.".into())
+    resolve_home(std::env::var_os(HOME_VAR), passwd_home)
+        .ok_or_else(|| format!("홈 폴더를 찾을 수 없다({HOME_VAR}이 비어 있다). {HOME_VAR}을 지정하고 다시 실행해 달라."))
 }
 
 /// 앱의 설정 폴더와 기본 저장 폴더. 맥에서는 같은 곳이다
 pub fn app_dirs() -> Result<(PathBuf, PathBuf), String> {
-    let home = home()?;
     #[cfg(target_os = "macos")]
     {
-        let base = home.join("Library/Application Support").join(IDENTIFIER);
+        let base = home()?.join("Library/Application Support").join(IDENTIFIER);
         Ok((base.clone(), base))
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(windows)]
     {
+        windows_dirs(
+            std::env::var_os("LOCALAPPDATA"),
+            win::local_app_data_folder,
+            || win::known_folder(&windows_sys::Win32::UI::Shell::FOLDERID_Documents),
+            || home().ok(),
+        )
+        .ok_or_else(|| "앱 데이터 폴더나 문서 폴더를 찾을 수 없다. LOCALAPPDATA·USERPROFILE을 지정하고 다시 실행해 달라.".into())
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        let home = home()?;
         Ok((home.join(".config").join(IDENTIFIER), home.join(".local/share").join(IDENTIFIER)))
+    }
+}
+
+/// 설정은 `%LOCALAPPDATA%\dev.aruu.aru`(로밍하지 않는다), 기본 저장 폴더는 문서 폴더(OneDrive로 옮겼으면 그곳) 아래 `Aru`.
+/// 저장 폴더를 AppData에 두지 않는 까닭: MSIX는 AppData 쓰기를 패키지 폴더로 가상화해 앱을 지우면 함께 지운다(원칙 3).
+/// 가상화를 끄는 unvirtualizedResources는 제한 기능이라 스토어가 거절할 수 있다. 문서 폴더는 가상화되지 않아
+/// 앱·aru 명령·탐색기·다른 편집기가 같은 실제 경로를 본다
+#[cfg(any(windows, test))]
+fn windows_dirs(
+    local_app_data: Option<OsString>,
+    local_known: impl FnOnce() -> Option<PathBuf>,
+    documents: impl FnOnce() -> Option<PathBuf>,
+    home: impl FnOnce() -> Option<PathBuf>,
+) -> Option<(PathBuf, PathBuf)> {
+    let config = resolve_home(local_app_data, local_known)?.join(IDENTIFIER);
+    let documents = documents()
+        .filter(|p| p.is_absolute())
+        .or_else(|| home().map(|h| h.join("Documents")))
+        .filter(|p| p.is_absolute())?;
+    Some((config, documents.join("Aru")))
+}
+
+/// `%LOCALAPPDATA%`. Claude 데스크톱·실행 별칭(WindowsApps)이 그 아래에 있다
+#[cfg(windows)]
+pub(crate) fn local_app_data() -> Option<PathBuf> {
+    resolve_home(std::env::var_os("LOCALAPPDATA"), win::local_app_data_folder)
+}
+
+#[cfg(windows)]
+mod win {
+    use std::path::PathBuf;
+    use windows_sys::core::GUID;
+
+    pub fn local_app_data_folder() -> Option<PathBuf> {
+        known_folder(&windows_sys::Win32::UI::Shell::FOLDERID_LocalAppData)
+    }
+
+    pub fn known_folder(id: &GUID) -> Option<PathBuf> {
+        use std::os::windows::ffi::OsStringExt;
+        use windows_sys::Win32::System::Com::CoTaskMemFree;
+        use windows_sys::Win32::UI::Shell::{SHGetKnownFolderPath, KF_FLAG_DEFAULT};
+        let mut raw: windows_sys::core::PWSTR = std::ptr::null_mut();
+        unsafe {
+            let hr = SHGetKnownFolderPath(id, KF_FLAG_DEFAULT as u32, std::ptr::null_mut(), &mut raw);
+            let path = (hr >= 0 && !raw.is_null()).then(|| {
+                let len = (0..).take_while(|&i| *raw.add(i) != 0).count();
+                PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(raw, len)))
+            });
+            // 실패해도 받은 포인터는 풀어야 한다(NULL이면 아무것도 하지 않는다)
+            CoTaskMemFree(raw as _);
+            path
+        }
+    }
+
+    pub fn local_time() -> windows_sys::Win32::Foundation::SYSTEMTIME {
+        let mut t = unsafe { std::mem::zeroed() };
+        unsafe { windows_sys::Win32::System::SystemInformation::GetLocalTime(&mut t) };
+        t
     }
 }
 
@@ -954,6 +1051,14 @@ pub fn entry(args: &[OsString]) -> Option<i32> {
             Some(1)
         }
     }
+}
+
+/// 콘솔 전용 실행 파일(aru-cli)의 입구. 창을 띄울 수 없으니 명령이 없으면 사용법 오류로 끝낸다
+pub fn cli_entry(args: &[OsString]) -> i32 {
+    entry(args).unwrap_or_else(|| {
+        eprintln!("명령을 붙여 실행해 달라.\n\n{HELP}");
+        2
+    })
 }
 
 /// `aru <명령>`으로 실행됐으면 처리하고 종료 코드를 돌려준다
@@ -1686,6 +1791,41 @@ mod tests {
         assert_eq!(parse_entry(&os(&["--version"])), Entry::Version);
         assert_eq!(parse_entry(&os(&["-V"])), Entry::Version);
         assert_eq!(parse_entry(&os(&["add", "x"])), Entry::Command(s(&["add", "x"])));
+    }
+
+    #[test]
+    fn w1_콘솔용_aru_cli는_명령이_없으면_창_대신_사용법_오류로_끝낸다() {
+        use std::ffi::OsString;
+        let os = |v: &[&str]| v.iter().map(OsString::from).collect::<Vec<_>>();
+        assert_eq!(cli_entry(&[]), 2);
+        assert_eq!(cli_entry(&os(&["-psn_0_12345"])), 2);
+        assert_eq!(cli_entry(&os(&["ad"])), 2);
+        assert_eq!(cli_entry(&os(&["--version"])), 0);
+    }
+
+    #[test]
+    fn w2_windows_설정은_localappdata_기본_저장_폴더는_문서_아래_aru다() {
+        let local = || Some(PathBuf::from("/Users/나/AppData/Local"));
+        let docs = || Some(PathBuf::from("/Users/나/OneDrive/문서"));
+        let home = || Some(PathBuf::from("/Users/나"));
+        let (config, data) = windows_dirs(Some("/C/환경/Local".into()), local, docs, home).unwrap();
+        assert_eq!(config, PathBuf::from("/C/환경/Local").join(IDENTIFIER));
+        assert_eq!(data, PathBuf::from("/Users/나/OneDrive/문서/Aru"));
+        // LOCALAPPDATA가 비었거나 상대 경로면 계정의 알려진 폴더(FOLDERID_LocalAppData)를 쓴다
+        for env in [None, Some("".into()), Some("상대".into())] {
+            assert_eq!(windows_dirs(env, local, docs, home).unwrap().0, PathBuf::from("/Users/나/AppData/Local").join(IDENTIFIER));
+        }
+        // 문서 폴더를 못 구하면 홈 아래 Documents
+        assert_eq!(windows_dirs(None, local, || None, home).unwrap().1, PathBuf::from("/Users/나/Documents/Aru"));
+        assert_eq!(windows_dirs(None, local, || Some("상대".into()), home).unwrap().1, PathBuf::from("/Users/나/Documents/Aru"));
+        assert_eq!(windows_dirs(None, || None, docs, home), None);
+        assert_eq!(windows_dirs(None, local, || None, || None), None);
+    }
+
+    #[test]
+    fn w3_windows_오늘은_로컬_시각의_연월일이다() {
+        assert_eq!(systemtime_date(2026, 1, 5), "2026-01-05");
+        assert_eq!(systemtime_date(2026, 12, 31), "2026-12-31");
     }
 
     #[test]

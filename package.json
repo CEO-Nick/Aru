@@ -11,7 +11,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "node e2e/run.mjs",
-    "e2e:webkit": "E2E_BROWSER=webkit node e2e/run.mjs"
+    "e2e:webkit": "E2E_BROWSER=webkit node e2e/run.mjs",
+    "e2e:win": "E2E_PLATFORM=win node e2e/run.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

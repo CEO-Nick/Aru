@@ -7,6 +7,9 @@ import { createServer } from "vite";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const mockScript = readFileSync(new URL("./mockTauri.js", import.meta.url), "utf8");
 
+/** E2E_PLATFORM=win: 모의 백엔드가 Windows 경로·명령·OS를 돌려준다(맥에서 돌리는 Windows 화면 시험) */
+export const isWin = process.env.E2E_PLATFORM === "win";
+
 export async function startServer() {
   const server = await createServer({
     root,
@@ -23,6 +26,8 @@ export async function openApp(
   { files = {}, now = "2026-10-14T10:00:00", hash = "", viewport = { width: 320, height: 470 }, storage = {}, session = {}, globals = {}, rootUnavailable = false } = {},
 ) {
   const context = await browser.newContext({ viewport });
+  // 컨텍스트에 두어 시나리오가 같은 컨텍스트에 따로 여는 창(빠른 입력·모아보기)도 같은 OS로 뜬다
+  if (isWin) await context.addInitScript(`window.__platform = "windows";`);
   const page = await context.newPage();
   await page.clock.install({ time: new Date(now) });
   await page.addInitScript(`window.__initialFiles = ${JSON.stringify(files)};`);

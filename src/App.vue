@@ -27,6 +27,7 @@ import { folderLabel } from "./core/folderLabel";
 import { toolLabel } from "./core/format";
 import { onFileChanged, onShowDate, openOverview } from "./platform/events";
 import { onQuitRequested, onQuitWaiting, readyToQuit } from "./platform/lifecycle";
+import { currentOs } from "./platform/os";
 import { tauriStore } from "./platform/tauriStore";
 import { tauriWindow } from "./platform/tauriWindow";
 import type { WindowControl } from "./platform/windowControl";
@@ -181,7 +182,7 @@ const dataRoot = ref({ label: "", title: "" });
 
 async function openSettings() {
   showSettings.value = !showSettings.value;
-  if (showSettings.value) dataRoot.value = folderLabel(await dataRootInfo());
+  if (showSettings.value) dataRoot.value = folderLabel(await dataRootInfo(), currentOs());
 }
 
 const changeFolder = () => health.repick(() => saver.flush());

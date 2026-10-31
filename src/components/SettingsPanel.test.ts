@@ -1,6 +1,9 @@
 import { mount } from "@vue/test-utils";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { currentOs } from "../platform/os";
 import SettingsPanel from "./SettingsPanel.vue";
+
+vi.mock("../platform/os", () => ({ currentOs: vi.fn(() => "macos") }));
 
 const mountPanel = () =>
   mount(SettingsPanel, {
@@ -55,5 +58,11 @@ describe("SettingsPanel", () => {
     expect(sw.attributes("aria-checked")).toBe("true");
     await sw.trigger("click");
     expect(wrapper.emitted("update:sortChecked")).toEqual([[false]]);
+  });
+
+  it("폴더 열기 버튼은 맥에서 Finder, Windows에서 탐색기라고 부른다", () => {
+    expect(mountPanel().find('[data-action="reveal-folder"]').text()).toBe("Finder에서 열기");
+    vi.mocked(currentOs).mockReturnValueOnce("windows");
+    expect(mountPanel().find('[data-action="reveal-folder"]').text()).toBe("탐색기에서 열기");
   });
 });

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { CarryOver } from "../core/settings";
+import { currentOs } from "../platform/os";
 
 const props = defineProps<{
   carryOver: CarryOver;
@@ -18,6 +19,8 @@ const emit = defineEmits<{
   "reveal-folder": [];
   close: [];
 }>();
+
+const revealLabel = currentOs() === "windows" ? "탐색기에서 열기" : "Finder에서 열기";
 
 const OPTIONS: { value: CarryOver; title: string; hint: string }[] = [
   { value: "keep", title: "그 날짜에 그대로 남기기", hint: "새 날은 빈 칸으로 시작한다." },
@@ -113,7 +116,7 @@ function moveChoice(event: KeyboardEvent, step: number) {
     <div class="path" :title="dataRoot">{{ dataRootLabel || dataRoot }}</div>
     <div class="buttons">
       <button class="btn" data-action="change-folder" @click="emit('change-folder')">폴더 변경…</button>
-      <button class="btn" data-action="reveal-folder" @click="emit('reveal-folder')">Finder에서 열기</button>
+      <button class="btn" data-action="reveal-folder" @click="emit('reveal-folder')">{{ revealLabel }}</button>
     </div>
     <p class="note">
       날짜별 마크다운 파일로 저장된다. OneDrive, Dropbox, Obsidian 볼트 폴더를 고르면 다른 컴퓨터와

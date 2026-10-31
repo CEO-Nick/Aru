@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { sliderToAlpha } from "../core/opacity";
+import { currentOs } from "../platform/os";
 import type { WindowControl } from "../platform/windowControl";
 
 const props = withDefaults(
   defineProps<{ windowControl: WindowControl; opacity: number; alwaysOnTop?: boolean }>(),
   { alwaysOnTop: true },
 );
+const os = currentOs();
 const emit = defineEmits<{
   "update:opacity": [value: number];
   "update:alwaysOnTop": [value: boolean];
@@ -27,7 +29,7 @@ function togglePin() {
 </script>
 
 <template>
-  <header class="titlebar" data-tauri-drag-region>
+  <header class="titlebar" :data-os="os" data-tauri-drag-region>
     <button
       class="icon pin"
       :class="{ on: alwaysOnTop }"
@@ -74,12 +76,15 @@ function togglePin() {
   justify-content: flex-end;
   gap: 6px;
   height: 34px;
-  /* macOS 신호등 버튼이 그려지는 자리를 비워 둔다 */
-  padding: 0 10px 0 76px;
+  padding: 0 10px;
   background: var(--bar);
   border-bottom: 1px solid var(--line);
   user-select: none;
   -webkit-user-select: none;
+}
+/* macOS 신호등 버튼이 그려지는 자리를 비워 둔다 */
+.titlebar[data-os="macos"] {
+  padding-left: 76px;
 }
 .icon {
   width: 24px;

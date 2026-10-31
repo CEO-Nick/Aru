@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 초안. CI에서 아직 돌려 보지 않았다. -->
+<!--
+  scripts/msix-build.ps1이 {{...}} 자리를 치환해 패키지 루트에 AppxManifest.xml로 넣는다.
+  로고 파일은 스크립트가 src-tauri/icons/에서 Assets/로 복사한다(크기별 qualifier 없이 한 장씩, resources.pri 없음).
+
+  가상화 끄기(desktop6:FileSystemWriteVirtualization·virtualization:ExcludedDirectories)는 넣지 않는다 — 2026-10-19 D1 번복.
+  전제인 restricted capability `unvirtualizedResources`를 Microsoft가 「Microsoft·파트너의 특정 PC 게임용」으로 적고 있어
+  심사 거절 위험이 있다(https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/app-capability-declarations).
+  대신 기본 저장 폴더를 가상화 대상이 아닌 문서 폴더(Documents\Aru)에 둔다(docs/WINDOWS_PORT.md D2).
+-->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap5="http://schemas.microsoft.com/appx/manifest/uap/windows10/5"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap5 desktop4 rescap">
+
+  <Identity
+    Name="{{IDENTITY_NAME}}"
+    Publisher="{{PUBLISHER}}"
+    Version="{{VERSION}}"
+    ProcessorArchitecture="{{ARCH}}" />
+
+  <Properties>
+    <DisplayName>Aru</DisplayName>
+    <PublisherDisplayName>{{PUBLISHER_DISPLAY_NAME}}</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <!-- D9: 1903(18362)이 하한. MaxVersionTested는 CI·VM에서 실제로 돌린 빌드로 올린다 -->
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.18362.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="ko-KR" />
+    <Resource Language="en-US" />
+  </Resources>
+
+  <Applications>
+    <Application Id="Aru" Executable="{{GUI_EXE}}" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="Aru"
+        Description="Aru"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <!-- Square310x310Logo는 Wide310x150Logo가 함께 있어야 해서 넣지 않았다(와이드 로고 미제작) -->
+        <uap:DefaultTile Square71x71Logo="Assets\Square71x71Logo.png" />
+      </uap:VisualElements>
+
+      <Extensions>
+        <!-- D5: `aru` 명령은 콘솔 실행 파일로 간다.
+             uap5:Extension의 Executable 속성이 Application의 Executable과 달라도 된다 — Windows Terminal이
+             Application은 WindowsTerminal.exe, alias 확장은 Executable="wt.exe"로 같은 구조를 쓴다.
+             그래서 두 번째 Application(AppListEntry="none")은 두지 않았다. 설치 후 `aru`가 GUI 쪽을 띄우면
+             아래 대안으로 바꾼다:
+               <Application Id="AruCli" Executable="{{CLI_EXE}}" EntryPoint="Windows.FullTrustApplication">
+                 <uap:VisualElements AppListEntry="none" DisplayName="Aru CLI" Description="Aru CLI" BackgroundColor="transparent"
+                   Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+                 <Extensions> (아래 블록을 이리로 옮김) </Extensions>
+               </Application> -->
+        <uap5:Extension Category="windows.appExecutionAlias" Executable="{{CLI_EXE}}" EntryPoint="Windows.FullTrustApplication">
+          <uap5:AppExecutionAlias desktop4:Subsystem="console">
+            <uap5:ExecutionAlias Alias="aru.exe" />
+          </uap5:AppExecutionAlias>
+        </uap5:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

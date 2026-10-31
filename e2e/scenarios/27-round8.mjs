@@ -1,6 +1,6 @@
 // 라운드 8 QA(QA8-01·02, 의심 AC3·AC5·AC6·AC10·ST2)와 7차 코드 리뷰(N4·N5·N6)에서 나온 경우들. QA8 시나리오를 옮기고 리뷰 항목을 더했다
 import assert from "node:assert/strict";
-import { calls, caretToEnd, fs, openApp, scenario, status, texts } from "../harness.mjs";
+import { calls, caretToEnd, fs, isWin, openApp, scenario, status, texts } from "../harness.mjs";
 
 const D13 = "daily/2026-10-13.md";
 const D14 = "daily/2026-10-14.md";
@@ -164,7 +164,12 @@ export default async function (browser) {
     await page.clock.runFor(10);
     assert.equal(await label(page, "codex"), "복사 실패");
     const cmd = page.locator(".connect .command");
-    assert.equal((await cmd.textContent()).trim(), "codex mcp add aru -- /Applications/Aru.app/Contents/MacOS/aru mcp");
+    assert.equal(
+      (await cmd.textContent()).trim(),
+      isWin
+        ? `codex mcp add aru -- "C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\aru.exe" mcp`
+        : "codex mcp add aru -- /Applications/Aru.app/Contents/MacOS/aru mcp",
+    );
     assert.equal(await cmd.evaluate((el) => getComputedStyle(el).userSelect || getComputedStyle(el).webkitUserSelect), "text");
     // 고르는 동안 사라지지 않는다
     await page.clock.runFor(5000);

@@ -1,7 +1,10 @@
 import { mount } from "@vue/test-utils";
 import { describe, expect, it, vi } from "vitest";
+import { currentOs } from "../platform/os";
 import TitleBar from "./TitleBar.vue";
 import type { WindowControl } from "../platform/windowControl";
+
+vi.mock("../platform/os", () => ({ currentOs: vi.fn(() => "macos") }));
 
 function fakeWindow() {
   return {
@@ -55,5 +58,13 @@ describe("TitleBar", () => {
 
     await pin.trigger("click");
     expect(win.setAlwaysOnTop).toHaveBeenLastCalledWith(true);
+  });
+
+  it("신호등 자리는 macOS에서만 비운다", () => {
+    const mac = mount(TitleBar, { props: { windowControl: fakeWindow(), opacity: 100 } });
+    expect(mac.find(".titlebar").attributes("data-os")).toBe("macos");
+    vi.mocked(currentOs).mockReturnValueOnce("windows");
+    const win = mount(TitleBar, { props: { windowControl: fakeWindow(), opacity: 100 } });
+    expect(win.find(".titlebar").attributes("data-os")).toBe("windows");
   });
 });

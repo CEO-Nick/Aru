@@ -21,9 +21,18 @@ pub fn manifest(command: &str, version: &str, author: &str) -> String {
             "entry_point": MANIFEST,
             "mcp_config": { "command": command, "args": ["mcp"] }
         },
-        "compatibility": { "platforms": ["darwin"] }
+        "compatibility": { "platforms": [mcpb_platform(std::env::consts::OS)] }
     })
     .to_string()
+}
+
+/// mcpb 규격의 플랫폼 이름(Node의 process.platform 값)
+fn mcpb_platform(os: &str) -> &str {
+    match os {
+        "macos" => "darwin",
+        "windows" => "win32",
+        other => other,
+    }
 }
 
 pub fn bundle(command: &str, version: &str, author: &str) -> Vec<u8> {
@@ -97,6 +106,15 @@ mod tests {
         assert_eq!(m["server"]["mcp_config"]["command"], "/Applications/Aru.app/Contents/MacOS/aru");
         assert_eq!(m["server"]["mcp_config"]["args"], serde_json::json!(["mcp"]));
         assert_eq!(m["version"], "0.2.8");
+    }
+
+    #[test]
+    fn w8_지원_플랫폼은_실행_중인_os다() {
+        let m: serde_json::Value = serde_json::from_str(&manifest(COMMAND, "0.2.8", "조익현")).unwrap();
+        assert_eq!(m["compatibility"]["platforms"], serde_json::json!(["darwin"]));
+        assert_eq!(mcpb_platform("macos"), "darwin");
+        assert_eq!(mcpb_platform("windows"), "win32");
+        assert_eq!(mcpb_platform("linux"), "linux");
     }
 
     #[test]

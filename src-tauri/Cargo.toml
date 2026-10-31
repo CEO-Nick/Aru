@@ -4,6 +4,7 @@ version = "1.0.0"
 description = "모든 창 위에 떠 있는 macOS 할 일 앱"
 authors = ["조익현"]
 edition = "2024"
+default-run = "aru"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,6 +14,16 @@ edition = "2024"
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
 name = "aru_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
+
+# Windows의 앱 실행 파일은 창 전용이라 터미널에 출력하지 못한다. 터미널·AI 도구용 aru 명령은 콘솔 실행 파일로 따로 둔다
+# tauri 번들러는 [[bin]]을 모두 앱 묶음에 넣는다. 맥 앱스토어판에 실행 파일이 하나 더 들어가지 않게 Windows 빌드에서만 켠다
+[[bin]]
+name = "aru-cli"
+path = "src/cli_main.rs"
+required-features = ["windows-cli"]
+
+[features]
+windows-cli = []
 
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
@@ -27,8 +38,27 @@ tauri-plugin-dialog = "2"
 tauri-plugin-global-shortcut = "2"
 base64 = "0.22"
 crc32fast = "1"
-libc = "0.2"
 sha2 = "0.10"
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.60", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_Security_Cryptography",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_UI_Shell",
+    "Win32_Graphics_Dwm",
+    "Win32_System_Com",
+    "Win32_System_Shutdown",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+    "Win32_Storage_Packaging_Appx",
+    "Wdk_System_SystemServices",
+] }
+tauri-plugin-single-instance = "2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"

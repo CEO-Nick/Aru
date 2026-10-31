@@ -1,0 +1,22 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "build": {
+    "features": ["windows-cli"]
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Aru",
+        "width": 320,
+        "height": 470,
+        "minWidth": 260,
+        "minHeight": 300,
+        "alwaysOnTop": true,
+        "visibleOnAllWorkspaces": true,
+        "decorations": false,
+        "shadow": true
+      }
+    ]
+  }
+}

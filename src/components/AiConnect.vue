@@ -12,6 +12,7 @@ const note = ref<{ text: string; command?: boolean } | null>(null);
 import { onMounted, onUnmounted } from "vue";
 import { type AiTool, connectCommand } from "../core/aiConnect";
 import { aiConnectInfo, installClaudeDesktop, type AiConnectInfo } from "../platform/aiConnect";
+import { currentOs } from "../platform/os";
 
 type Target = AiTool | "claude-desktop";
 
@@ -47,7 +48,7 @@ const label = (target: Target) => (feedback.value?.target === target ? feedback.
 
 async function copy(tool: AiTool) {
   if (!info.value) return;
-  const command = connectCommand(tool, info.value.command);
+  const command = connectCommand(tool, info.value.command, currentOs());
   note.value = null;
   try {
     await navigator.clipboard.writeText(command);

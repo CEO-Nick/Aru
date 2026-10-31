@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { calls, openApp, reload, scenario, status, texts } from "../harness.mjs";
+import { calls, isWin, openApp, reload, scenario, status, texts } from "../harness.mjs";
 
-const DEFAULT_ROOT = "/Users/me/Library/Application Support/dev.aruu.aru";
+const DEFAULT_ROOT = isWin ? "C:\\Users\\me\\Documents\\Aru" : "/Users/me/Library/Application Support/dev.aruu.aru";
+const DROPBOX = isWin ? "C:\\Users\\me\\Dropbox\\todo" : "/Users/me/Dropbox/todo";
 
 /** 설정에서 폴더를 고르고, 바뀐 폴더로 창이 새로고침될 때까지 기다린다 */
 async function switchTo(page, path, { copied }) {
@@ -26,17 +27,17 @@ export default async function (browser) {
     assert.equal(await path.textContent(), "기본 폴더 (Aru 안)");
     assert.equal(await path.getAttribute("title"), DEFAULT_ROOT);
 
-    await switchTo(page, "/Users/me/Dropbox/todo", { copied: true });
+    await switchTo(page, DROPBOX, { copied: true });
     await page.locator('[aria-label="설정"]').click();
     await page.clock.runFor(10);
-    assert.equal(await path.textContent(), "~/Dropbox/todo");
-    assert.equal(await path.getAttribute("title"), "/Users/me/Dropbox/todo");
+    assert.equal(await path.textContent(), isWin ? "~\\Dropbox\\todo" : "~/Dropbox/todo");
+    assert.equal(await path.getAttribute("title"), DROPBOX);
     // 할 일을 옮겼으면 따로 알리지 않는다
     assert.equal(await status(page), "저장됨");
 
     await page.locator('[data-action="reveal-folder"]').click();
     await page.clock.runFor(10);
-    assert.deepEqual(await calls(page, "plugin:opener|reveal_item_in_dir"), [{ paths: ["/Users/me/Dropbox/todo"] }]);
+    assert.deepEqual(await calls(page, "plugin:opener|reveal_item_in_dir"), [{ paths: [DROPBOX] }]);
     assert.deepEqual(errors, []);
     await context.close();
   });

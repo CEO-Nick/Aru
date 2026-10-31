@@ -1,6 +1,6 @@
 // 라운드 9 QA(QA9-01~06, 의심 AI9-9·빠른 입력)와 8차 코드 리뷰(D4·D5·D7)에서 나온 경우들. QA9 시나리오(qa9-ui)를 옮기고 리뷰 항목을 더했다
 import assert from "node:assert/strict";
-import { calls, caretToEnd, fs, openApp, reload, scenario, status, texts } from "../harness.mjs";
+import { calls, caretToEnd, fs, isWin, openApp, reload, scenario, status, texts } from "../harness.mjs";
 
 const D14 = "daily/2026-10-14.md";
 const D15 = "daily/2026-10-15.md";
@@ -531,15 +531,17 @@ export default async function (browser) {
   });
 
   await scenario("AI9-7 1000자 경로 + 복사 실패: 명령 글이 260px 창에서 넘치지 않고 따옴표로 바르게 감싸진다", async () => {
-    const long = "/Volumes/" + "아주긴폴더 이름'$`!".repeat(50) + "/Aru.app/Contents/MacOS/aru";
+    const long = isWin
+      ? "D:\\" + "아주긴폴더 이름'$`!".repeat(50) + "\\aru.exe"
+      : "/Volumes/" + "아주긴폴더 이름'$`!".repeat(50) + "/Aru.app/Contents/MacOS/aru";
     const { page, context } = await openApp(browser, { globals: { __aruCommand: long }, viewport: { width: 260, height: 300 } });
     await openSettings(page, { clipboardFails: true });
     await btn(page, "codex").click();
     await page.clock.runFor(10);
     const cmd = (await page.locator(".connect .command").textContent()).trim();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    assert.ok(cmd.startsWith("codex mcp add aru -- '/Volumes/"), cmd.slice(0, 80));
-    assert.ok(cmd.endsWith("/aru' mcp"), cmd.slice(-40));
+    assert.ok(cmd.startsWith(isWin ? 'codex mcp add aru -- "D:\\' : "codex mcp add aru -- '/Volumes/"), cmd.slice(0, 80));
+    assert.ok(cmd.endsWith(isWin ? '\\aru.exe" mcp' : "/aru' mcp"), cmd.slice(-40));
     assert.ok(overflow <= 0, `가로 넘침 ${overflow}px`);
     await context.close();
   });

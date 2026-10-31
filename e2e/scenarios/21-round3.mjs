@@ -1,6 +1,6 @@
 // 라운드 3 QA(QA3-01~06)와 2차 코드 리뷰에서 나온 경우들. QA3 시나리오를 그대로 옮기고 리뷰 항목을 더했다
 import assert from "node:assert/strict";
-import { calls, caretToEnd, fs, openApp, scenario, setCaret, status, texts } from "../harness.mjs";
+import { calls, caretToEnd, fs, isWin, openApp, scenario, setCaret, status, texts } from "../harness.mjs";
 
 const TODAY = "daily/2026-10-14.md";
 const YESTERDAY = "daily/2026-10-13.md";
@@ -129,7 +129,9 @@ async function storage(browser) {
   });
 
   await scenario("G01 아주 긴 iCloud 하위 폴더 이름이 가장 작은 창(260px)에서 가로로 넘치지 않고 title에 전체 경로", async () => {
-    const long = "/Users/me/Library/Mobile Documents/com~apple~CloudDocs/" + "아주긴폴더이름".repeat(12) + "/할일";
+    const long = isWin
+      ? "C:\\Users\\me\\OneDrive\\" + "아주긴폴더이름".repeat(12) + "\\할일"
+      : "/Users/me/Library/Mobile Documents/com~apple~CloudDocs/" + "아주긴폴더이름".repeat(12) + "/할일";
     const { page, context } = await openApp(browser, { viewport: { width: 260, height: 470 } });
     await page.evaluate((p) => sessionStorage.setItem("__rootPath", p), long);
     await page.locator('[aria-label="설정"]').click();
@@ -140,7 +142,7 @@ async function storage(browser) {
       sw: document.querySelector(".settings-body").scrollWidth,
       cw: document.querySelector(".settings-body").clientWidth,
     }));
-    assert.ok(info.text.startsWith("iCloud Drive/"));
+    assert.ok(info.text.startsWith(isWin ? "OneDrive\\" : "iCloud Drive/"), info.text);
     assert.equal(info.title, long);
     assert.ok(info.sw <= info.cw, "설정 화면이 가로로 넘친다");
     await context.close();

@@ -1,6 +1,7 @@
 import { getVersion } from "@tauri-apps/api/app";
 import { invoke } from "@tauri-apps/api/core";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { currentOs } from "./os";
 
 const FEEDBACK_FORM = "https://tally.so/r/laDqkN";
 
@@ -8,6 +9,6 @@ const FEEDBACK_FORM = "https://tally.so/r/laDqkN";
 export async function openFeedback() {
   const url = new URL(FEEDBACK_FORM);
   url.searchParams.set("version", await getVersion());
-  url.searchParams.set("os", await invoke<string>("os_version").catch(() => "macOS"));
+  url.searchParams.set("os", await invoke<string>("os_version").catch(() => (currentOs() === "windows" ? "Windows" : "macOS")));
   await openUrl(url.toString());
 }

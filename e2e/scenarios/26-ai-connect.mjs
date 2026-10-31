@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
-import { calls, openApp, scenario } from "../harness.mjs";
+import { calls, isWin, openApp, scenario } from "../harness.mjs";
 
-const ARU = "/Applications/Aru.app/Contents/MacOS/aru";
+const ARU = isWin ? "C:\\Users\\me\\AppData\\Local\\Microsoft\\WindowsApps\\aru.exe" : "/Applications/Aru.app/Contents/MacOS/aru";
+// Windows는 PowerShell·cmd 둘 다에서 되도록 늘 큰따옴표로 감싼다
+const QUOTED_ARU = isWin ? `"${ARU}"` : ARU;
+const SPACED = isWin ? "C:\\Users\\me\\My Apps\\aru.exe" : "/Users/me/My Apps/Aru.app/Contents/MacOS/aru";
 
 async function openSettings(page) {
   // 실제 클립보드 대신 마지막으로 복사한 글자를 남긴다
@@ -22,26 +25,26 @@ export default async function (browser) {
     const claude = page.locator('[data-action="connect-claude-code"]');
     await claude.click();
     await page.clock.runFor(10);
-    assert.equal(await page.evaluate(() => window.__copied), `claude mcp add --scope user aru -- ${ARU} mcp`);
+    assert.equal(await page.evaluate(() => window.__copied), `claude mcp add --scope user aru -- ${QUOTED_ARU} mcp`);
     assert.equal((await claude.textContent()).trim(), "복사됨 ✓");
     await page.clock.runFor(1600);
     assert.equal((await claude.textContent()).trim(), "Claude Code");
 
     await page.locator('[data-action="connect-codex"]').click();
     await page.clock.runFor(10);
-    assert.equal(await page.evaluate(() => window.__copied), `codex mcp add aru -- ${ARU} mcp`);
+    assert.equal(await page.evaluate(() => window.__copied), `codex mcp add aru -- ${QUOTED_ARU} mcp`);
     assert.deepEqual(errors, []);
     await context.close();
   });
 
   await scenario("AI 연결: 경로에 빈칸이 있으면 따옴표로 감싼다", async () => {
-    const { page, context } = await openApp(browser, { globals: { __aruCommand: "/Users/me/My Apps/Aru.app/Contents/MacOS/aru" } });
+    const { page, context } = await openApp(browser, { globals: { __aruCommand: SPACED } });
     await openSettings(page);
     await page.locator('[data-action="connect-codex"]').click();
     await page.clock.runFor(10);
     assert.equal(
       await page.evaluate(() => window.__copied),
-      "codex mcp add aru -- '/Users/me/My Apps/Aru.app/Contents/MacOS/aru' mcp",
+      isWin ? `codex mcp add aru -- "${SPACED}" mcp` : `codex mcp add aru -- '${SPACED}' mcp`,
     );
     await context.close();
   });
