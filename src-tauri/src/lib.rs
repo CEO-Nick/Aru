@@ -1254,8 +1254,24 @@ mod platform {
     pub const REVEAL: &str = "<reveal>";
 
     /// 탐색기에서 파일을 골라 둔 채 보여 준다
+    /// 이미 열린 탐색기 창이 있으면 그 창에서 선택한다. explorer /select는 누를 때마다 창을 새로 띄웠다(실기)
     pub fn reveal(file: &Path) -> bool {
-        std::process::Command::new("explorer.exe").arg(format!("/select,{}", file.display())).spawn().is_ok()
+        use windows_sys::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
+        use windows_sys::Win32::UI::Shell::{ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems};
+        let path = wide(file.as_os_str());
+        let shown = unsafe {
+            CoInitializeEx(std::ptr::null(), COINIT_APARTMENTTHREADED as u32);
+            let item = ILCreateFromPathW(path.as_ptr());
+            if item.is_null() {
+                false
+            } else {
+                let ok = SHOpenFolderAndSelectItems(item, 0, std::ptr::null(), 0) >= 0;
+                ILFree(item);
+                ok
+            }
+        };
+        super::diag(&format!("claude desktop: reveal shell={shown}"));
+        shown || std::process::Command::new("explorer.exe").arg(format!("/select,{}", file.display())).spawn().is_ok()
     }
 
     /// app이 비어 있으면 파일 연결(기본 앱)로 연다
