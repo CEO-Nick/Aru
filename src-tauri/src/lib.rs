@@ -1173,22 +1173,50 @@ mod platform {
     }
 
     /// 깔려 있는 Claude 데스크톱 앱의 경로
-    pub fn claude_desktop() -> Option<String> {
-        let exe = crate::cli::local_app_data()?.join("AnthropicClaude").join("claude.exe");
-        exe.is_file().then(|| exe.to_string_lossy().into_owned())
+    fn wide(s: &std::ffi::OsStr) -> Vec<u16> {
+        use std::os::windows::ffi::OsStrExt;
+        s.encode_wide().chain(Some(0)).collect()
     }
 
+    /// `.mcpb`를 여는 앱의 이름. 스토어(MSIX)판 Claude는 WindowsApps 안이라 경로로 못 찾고, 파일 연결로만 보인다
+    fn mcpb_handler_name() -> Option<String> {
+        use windows_sys::Win32::UI::Shell::{AssocQueryStringW, ASSOCF_INIT_IGNOREUNKNOWN, ASSOCSTR_FRIENDLYAPPNAME};
+        let ext = wide(".mcpb".as_ref());
+        let mut buf = [0u16; 260];
+        let mut len = buf.len() as u32;
+        let hr = unsafe {
+            AssocQueryStringW(ASSOCF_INIT_IGNOREUNKNOWN, ASSOCSTR_FRIENDLYAPPNAME, ext.as_ptr(), std::ptr::null(), buf.as_mut_ptr(), &mut len)
+        };
+        if hr != 0 {
+            return None;
+        }
+        let end = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+        Some(String::from_utf16_lossy(&buf[..end]))
+    }
+
+    /// 깔려 있는 Claude 데스크톱. 예전 설치판은 실행 파일 경로, 스토어판은 빈 문자열(파일 연결로 연다)
+    pub fn claude_desktop() -> Option<String> {
+        if let Some(exe) = crate::cli::local_app_data().map(|l| l.join("AnthropicClaude").join("claude.exe")) {
+            if exe.is_file() {
+                return Some(exe.to_string_lossy().into_owned());
+            }
+        }
+        let handler = mcpb_handler_name();
+        super::diag(&format!("claude desktop: .mcpb handler {handler:?}"));
+        handler.filter(|name| name.to_lowercase().contains("claude")).map(|_| String::new())
+    }
+
+    /// app이 비어 있으면 파일 연결(기본 앱)로 연다
     pub fn open_with(file: &Path, app: &str) -> bool {
         use windows_sys::Win32::UI::Shell::ShellExecuteW;
         use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
-        let wide = |s: &std::ffi::OsStr| {
-            use std::os::windows::ffi::OsStrExt;
-            s.encode_wide().chain(Some(0)).collect::<Vec<u16>>()
-        };
-        let (app, file) = (wide(app.as_ref()), wide(format!("\"{}\"", file.display()).as_ref()));
         let open = wide("open".as_ref());
-        let result = unsafe {
-            ShellExecuteW(std::ptr::null_mut(), open.as_ptr(), app.as_ptr(), file.as_ptr(), std::ptr::null(), SW_SHOWNORMAL)
+        let result = if app.is_empty() {
+            let file = wide(file.as_os_str());
+            unsafe { ShellExecuteW(std::ptr::null_mut(), open.as_ptr(), file.as_ptr(), std::ptr::null(), std::ptr::null(), SW_SHOWNORMAL) }
+        } else {
+            let (app, file) = (wide(app.as_ref()), wide(format!("\"{}\"", file.display()).as_ref()));
+            unsafe { ShellExecuteW(std::ptr::null_mut(), open.as_ptr(), app.as_ptr(), file.as_ptr(), std::ptr::null(), SW_SHOWNORMAL) }
         };
         // 32 이하는 오류 코드다
         result as isize > 32
