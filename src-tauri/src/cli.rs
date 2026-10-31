@@ -1576,8 +1576,10 @@ mod tests {
         assert_eq!(next_at("", "t", "someday.md", 100), 100);
     }
 
+    #[cfg(unix)]
     #[test]
     fn f1_명령도_os_오류를_한국어로_알린다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let (root, config) = dirs("f1-ro");
         std::fs::set_permissions(&root, std::fs::Permissions::from_mode(0o555)).unwrap();
@@ -1828,8 +1830,10 @@ mod tests {
         assert_eq!(systemtime_date(2026, 12, 31), "2026-12-31");
     }
 
+    #[cfg(unix)]
     #[test]
     fn b10_utf8이_아닌_인자는_패닉하지_않고_거절한다() {
+        #[cfg(unix)]
         use std::os::unix::ffi::OsStringExt;
         let bad = std::ffi::OsString::from_vec(vec![0xff, 0xfe, b' ', b'x']);
         assert_eq!(parse_entry(&[std::ffi::OsString::from("add"), bad.clone()]), Entry::BadArgs);
@@ -2017,8 +2021,10 @@ mod tests {
         assert_eq!(sandbox_home(), None);
     }
 
+    #[cfg(unix)]
     #[test]
     fn r2_n10_읽을_수_없는_기록_파일은_덮어쓰지_않는다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let (root, config) = dirs("n10");
         let log = config.join(BATCH_LOG);
@@ -2319,11 +2325,13 @@ mod tests {
         rx.recv_timeout(std::time::Duration::from_secs(3)).expect("3초 안에 끝나지 않았다(멈춤)")
     }
 
+    #[cfg(unix)]
     fn mkfifo(path: &Path) {
         let c = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
         assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o644) }, 0);
     }
 
+    #[cfg(unix)]
     #[test]
     fn r7_데이터_파일이_fifo면_멈추지_않고_잠금도_쥐고_있지_않는다() {
         for name in ["daily/2026-10-17.md", "settings.json"] {

@@ -1174,6 +1174,7 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
     #[test]
     fn s3_심링크는_가리키는_파일에_쓰고_링크는_그대로_둔다() {
         let root = temp_root("symlink");
@@ -1184,6 +1185,7 @@ mod tests {
         assert!(fs::symlink_metadata(root.join("someday.md")).unwrap().file_type().is_symlink());
         assert_eq!(fs::read_to_string(&real).unwrap(), "- [ ] 새\n");
     }
+    #[cfg(unix)]
     #[test]
     fn r2_flock을_지원하지_않는_폴더에서는_잠그지_않고_진행한다() {
         let root = temp_root("nolock");
@@ -1244,6 +1246,7 @@ mod tests {
         assert_eq!(read_text(&root, rel).unwrap().as_deref(), Some("무조건\n"));
     }
 
+    #[cfg(unix)]
     #[test]
     fn r2_끊어진_심링크는_링크를_두고_가리키는_곳에_파일을_만든다() {
         let root = temp_root("dangling");
@@ -1260,8 +1263,10 @@ mod tests {
         assert_eq!(fs::read_to_string(root.join("상대.md")).unwrap(), "x\n");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r2_바꿔_쓸_때_원래_파일의_권한을_지킨다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let root = temp_root("perm");
         write_text(&root, "someday.md", "옛\n").unwrap();
@@ -1333,18 +1338,23 @@ mod tests {
         assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
     }
 
+    #[cfg(unix)]
     fn read_only_dir(name: &str) -> PathBuf {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let dir = temp_root(name);
         fs::set_permissions(&dir, fs::Permissions::from_mode(0o555)).unwrap();
         dir
     }
 
+    #[cfg(unix)]
     fn unlock(dir: &Path) {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let _ = fs::set_permissions(dir, fs::Permissions::from_mode(0o755));
     }
 
+    #[cfg(unix)]
     #[test]
     fn f1_os_오류는_한국어로_알린다() {
         let raw = |code| io_message(&std::io::Error::from_raw_os_error(code));
@@ -1372,6 +1382,7 @@ mod tests {
         assert!(!e.contains("UTF-8") || e.contains("UTF-8이"), "{e}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn f1_쓸_수_없는_폴더에_쓰면_한국어로_알린다() {
         let root = read_only_dir("ro-write");
@@ -1382,6 +1393,7 @@ mod tests {
         assert_eq!(lock, "저장 폴더에 쓸 수 없어요: 권한이 없어요");
     }
 
+    #[cfg(unix)]
     #[test]
     fn f1_쓸_수_없는_폴더로는_바꾸지_않고_아무것도_남기지_않는다() {
         let from = temp_root("ro-from");
@@ -1441,6 +1453,7 @@ mod tests {
         f.set_modified(SystemTime::now() - Duration::from_secs(2 * 3600)).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn r4_q1_사용자_tmp_파일과_저장_폴더_밖은_정리하지_않는다() {
         let root = temp_root("q1");
@@ -1469,8 +1482,10 @@ mod tests {
         assert_eq!(fs::read_to_string(ext.join("someday-real.md")).unwrap(), "- [ ] 나\n");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r4_q2_복사_중간에_실패하면_새_폴더는_그대로고_다시_하면_모두_옮긴다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let from = temp_root("q2-from");
         let to = temp_root("q2-to");
@@ -1513,6 +1528,7 @@ mod tests {
         assert_eq!(fs::read_to_string(to.join("daily/2026-10-06.md")).unwrap(), "- [ ] 정상\n");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r4_q3_확인용_파일_이름이_겹쳐도_사용자_파일을_건드리지_않는다() {
         let user = temp_root("q3-user").join("내파일.txt");
@@ -1563,8 +1579,10 @@ mod tests {
         assert_eq!(xattr(&file, "com.apple.metadata:_kMDItemUserTags").as_deref(), Some(&b"Red"[..]));
     }
 
+    #[cfg(unix)]
     #[test]
     fn r4_q5_잠금_파일이_읽기_전용이거나_폴더여도_잠근다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let ro = temp_root("q5-ro");
         fs::write(ro.join(LOCK_FILE), "").unwrap();
@@ -1600,6 +1618,7 @@ mod tests {
         assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
     }
 
+    #[cfg(unix)]
     #[test]
     fn r4_끊어진_심링크가_가리키는_폴더가_없으면_만들지_않고_실패한다() {
         let root = temp_root("dangling-dir");
@@ -1632,6 +1651,7 @@ mod tests {
         assert!(!old.join("someday.md").exists(), "옛 폴더에 썼다");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r4_enolck도_잠금을_지원하지_않는_것으로_본다() {
         let root = temp_root("enolck");
@@ -1640,8 +1660,10 @@ mod tests {
         assert!(r.is_ok(), "{:?}", r.err());
     }
 
+    #[cfg(unix)]
     #[test]
     fn r4_읽기_전용_할_일_파일은_고쳐_쓰지_않는다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let root = temp_root("ro-file");
         write_text(&root, "someday.md", "- [ ] 옛\n").unwrap();
@@ -1679,6 +1701,7 @@ mod tests {
         assert_eq!(prepare_new_root(Some(&from), &from), Ok(Prepared::Kept));
     }
 
+    #[cfg(unix)]
     fn enotsup(_: &Path, _: &Path) -> std::io::Result<()> {
         Err(std::io::Error::from_raw_os_error(libc::ENOTSUP))
     }
@@ -1714,6 +1737,7 @@ mod tests {
         (staging, to)
     }
 
+    #[cfg(unix)]
     #[test]
     fn r5_rename_excl을_모르는_디스크에서도_덮지_않고_옮긴다() {
         let (staging, to) = staged("r5-notsup");
@@ -1751,6 +1775,7 @@ mod tests {
 
     /// 실제 디스크 이미지(exFAT·FAT 등)에서 확인한다. ARU_DISK_TO(옮길 디스크 안의 빈 자리)가 있을 때만 돈다.
     /// ARU_DISK_FROM을 주면 지금 저장 폴더도 그 디스크에 둔다(없으면 APFS 임시 폴더)
+    #[cfg(unix)]
     #[test]
     fn r6_디스크_사이로_저장_폴더를_바꾼다() {
         let Some(to_base) = std::env::var_os("ARU_DISK_TO").map(PathBuf::from) else { return };
@@ -1794,6 +1819,7 @@ mod tests {
         rx.recv_timeout(Duration::from_secs(3)).expect("3초 안에 끝나지 않았다(멈춤)")
     }
 
+    #[cfg(unix)]
     #[test]
     fn r5_잠금_파일이_fifo면_멈추지_않고_한국어로_실패한다() {
         let root = temp_root("r5-fifo");
@@ -1807,6 +1833,7 @@ mod tests {
         assert!(e.contains(".aru.lock") && !e.is_ascii(), "{e}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r5_잠금_파일이_심링크면_따라가지_않는다() {
         let root = temp_root("r5-locklink");
@@ -1840,6 +1867,7 @@ mod tests {
         f.set_modified(t).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn r5_죽은_뒤_남은_staging과_확인용_파일은_한_시간이_지나면_정리한다() {
         let from = temp_root("r5-left-from");
@@ -1930,8 +1958,10 @@ mod tests {
         assert_eq!(names_in(&to), vec!["daily", "daily/2026-10-01.md", "someday.md"]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn r6_하드링크_파일을_읽을_때_잠금_파일을_만들지_않고_읽기_전용_폴더에서도_읽는다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let root = temp_root("r6-ro-read");
         write_text(&root, "someday.md", "- [ ] 가\n").unwrap();
@@ -1987,8 +2017,10 @@ mod tests {
         assert_eq!(names_in(&to), vec!["daily", "settings.json"]);
     }
 
+    #[cfg(unix)]
     #[test]
     fn r6_잠금_파일이_권한_없는_폴더면_권한_오류로_알린다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let root = temp_root("r6-lockdir");
         fs::create_dir(root.join(LOCK_FILE)).unwrap();
@@ -1998,6 +2030,7 @@ mod tests {
         assert!(e.contains("권한이 없어요"), "{e}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r6_설정_폴더_잠금_파일도_링크나_fifo면_따라가지_않고_설정_폴더라고_알린다() {
         let dir = temp_root("r6-config-fifo");
@@ -2033,6 +2066,7 @@ mod tests {
         assert!(!staging.exists() && !probe.exists() && !tmp.exists(), "{:?}", names_in(&to));
     }
 
+    #[cfg(unix)]
     fn mkfifo(path: &Path) {
         let c = CString::new(path.as_os_str().as_bytes()).unwrap();
         assert_eq!(unsafe { libc::mkfifo(c.as_ptr(), 0o644) }, 0);
@@ -2074,6 +2108,7 @@ mod tests {
         assert_eq!(names_in(&to), vec!["daily", "daily/2026-10-01.md"], "섞었거나, 쓰기 시작한 폴더에 표지를 남겼다");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r7_표지가_폴더거나_끊어진_링크면_표지_이름을_알려_준다() {
         let from = temp_root("r7-marker-kind-from");
@@ -2088,6 +2123,7 @@ mod tests {
         assert!(e.contains(COPYING_MARKER), "{e}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r7_복사_대체_경로는_같은_이름을_덮지_않고_임시_파일을_남기지_않는다() {
         let base = temp_root("r7-copy-new");
@@ -2108,6 +2144,7 @@ mod tests {
         assert!(e.contains("파일이 너무 커요"), "{e}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r7_할_일_파일이_fifo면_멈추지_않고_특수_파일이라고_알린다() {
         let root = temp_root("r7-data-fifo");
@@ -2135,6 +2172,7 @@ mod tests {
     }
 
     // 고치기 전 코드로 돌리면 프로세스가 죽거나(희소 파일) 메모리를 끝없이 쓴다(/dev/zero) — 고친 뒤에만 넣었다
+    #[cfg(unix)]
     #[test]
     fn r7_거대한_희소_파일과_dev_zero_링크도_죽거나_끝없이_읽지_않는다() {
         let root = temp_root("r7-sparse");
@@ -2294,6 +2332,7 @@ mod tests {
         assert_eq!(watcher.join().unwrap(), 0, "다 쓰기 전의 빈 파일이 보였다(꺼지면 빈 설정으로 남는다)");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r8_fifo_위로_써도_잠금을_쥔_채_멈추지_않는다() {
         let root = temp_root("r8-write-fifo");
@@ -2306,8 +2345,10 @@ mod tests {
         assert_eq!(fs::read_to_string(root.join("someday.md")).unwrap(), "- [ ] 가\n");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r8_폴더_설정을_못_쓰고_되돌리기도_못하면_오류에_함께_알린다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let from = todo_source("r8-rollback-from");
         let to = temp_root("r8-rollback-to");
@@ -2362,6 +2403,7 @@ mod tests {
         assert!(to.join("note.md").exists(), "옮기는 파일이 아닌 사용자 파일을 지웠다");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r9_n2_새_폴더의_daily가_링크면_이어_하지_않고_링크_너머를_지우지_않는다() {
         let from = todo_source("r9-link-from");
@@ -2413,6 +2455,7 @@ mod tests {
         assert_eq!(snapshot(&to), foreign, "다시 하니 남의 파일을 덮었다");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r10_b2_지우는_순간_daily가_링크여도_링크_너머를_지우지_않는다() {
         let base = temp_root("r10-b2");
@@ -2475,8 +2518,10 @@ mod tests {
         assert!(long < base + Duration::from_secs(3), "빈 목록 {base:?}, 30만 개 {long:?}");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r10_원본에_아이디를_못_남겨도_꺼진_복사를_이어_한다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let from = todo_source("r10-ro-from");
         fs::set_permissions(&from, fs::Permissions::from_mode(0o555)).unwrap();
@@ -2520,6 +2565,7 @@ mod tests {
     }
 
     /// exFAT·SMB처럼 RENAME_EXCL이 없어 복사로 두는 경로
+    #[cfg(unix)]
     fn foreign_before_someday_notsup(src: &Path, dst: &Path) -> std::io::Result<()> {
         if dst.file_name().is_some_and(|n| n == "someday.md") {
             arrive(dst.parent().unwrap())?;
@@ -2527,6 +2573,7 @@ mod tests {
         enotsup(src, dst)
     }
 
+    #[cfg(unix)]
     #[test]
     fn r11_되돌릴_때_그_사이_daily에_들어온_남의_파일은_지우지_않는다() {
         let places: [(&str, fn(&Path, &Path) -> std::io::Result<()>); 2] = [("r11-undo", foreign_before_someday), ("r11-undo-copy", foreign_before_someday_notsup)];
@@ -2605,6 +2652,7 @@ mod tests {
         assert_eq!(fs::read_to_string(to.join("daily/2026-10-01.md")).unwrap(), "- [ ] 다른 맥\n");
     }
 
+    #[cfg(unix)]
     #[test]
     fn r11_대신_아이디는_다시_마운트하면_바뀌는_dev_번호를_쓰지_않는다() {
         let from = todo_source("r11-fid");

@@ -1459,8 +1459,10 @@ mod tests {
         assert!(new.join("daily/2026-10-02.md").exists());
     }
 
+    #[cfg(unix)]
     #[test]
     fn r7_폴더_설정을_못_쓰면_폴더_설정이라고_알린다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let base = switch_base("r7-location-denied");
         std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o555)).unwrap();

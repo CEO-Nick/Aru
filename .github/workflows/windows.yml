@@ -52,9 +52,7 @@ jobs:
       - run: npm test
       - run: npm run build
 
-      # Unix 전용 테스트 45개의 cfg 분리(WINDOWS_PORT.md ④) 전까지는 빌드·산출물을 막지 않는다
       - name: cargo test (NTFS)
-        continue-on-error: true
         working-directory: src-tauri
         run: cargo test
 

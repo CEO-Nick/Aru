@@ -85,6 +85,7 @@ fn b9_date_명령_없이_tz의_오늘을_쓴다() {
     assert!(o.status.success(), "{}", text(&o));
 }
 
+#[cfg(unix)]
 #[test]
 fn b10_utf8이_아닌_인자는_오류로_끝난다() {
     use std::os::unix::ffi::OsStrExt;

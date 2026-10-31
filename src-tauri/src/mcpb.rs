@@ -180,8 +180,10 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn r9_n3_확장_파일은_다_쓴_새_파일로_갈아_끼운다() {
+        #[cfg(unix)]
         use std::os::unix::fs::MetadataExt;
         let dir = scratch("n3-atomic");
         std::fs::write(dir.join("Aru.mcpb"), "이전 파일").unwrap();
@@ -194,8 +196,10 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    #[cfg(unix)]
     #[test]
     fn r9_ac5_확장_파일을_못_만들면_까닭을_한국어로_알린다() {
+        #[cfg(unix)]
         use std::os::unix::fs::PermissionsExt;
         let base = scratch("ac5");
         std::fs::set_permissions(&base, std::fs::Permissions::from_mode(0o555)).unwrap();
