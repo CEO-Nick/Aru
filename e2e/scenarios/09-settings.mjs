@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { fs, openApp, scenario, texts, caretToEnd } from "../harness.mjs";
+import { fs, openApp, scenario, texts, caretToEnd , isWin} from "../harness.mjs";
+const DEFAULT_LABEL = isWin ? "기본 폴더 (~\\Documents\\Aru)" : "기본 폴더 (Aru 안)";
 
 const calls = (page, name) =>
   page.evaluate((n) => window.__calls.filter(([c]) => c === n).map(([, a]) => a), name);
@@ -9,7 +10,7 @@ export default async function (browser) {
     const { page, context, errors } = await openApp(browser, { files: { "daily/2026-10-14.md": "- [ ] 하나\n" } });
     await page.locator('[aria-label="설정"]').click();
     await page.clock.runFor(10);
-    assert.equal(await page.locator(".settings .path").textContent(), "기본 폴더 (Aru 안)");
+    assert.equal(await page.locator(".settings .path").textContent(), DEFAULT_LABEL);
     assert.equal(await page.locator('[data-list="today"]').isVisible(), false);
     await page.locator('[data-action="close"]').click();
     assert.deepEqual(await texts(page, "today"), ["하나"]);

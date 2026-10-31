@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { calls, isWin, openApp, reload, scenario, status, texts } from "../harness.mjs";
+const DEFAULT_LABEL = isWin ? "기본 폴더 (~\\Documents\\Aru)" : "기본 폴더 (Aru 안)";
 
 const DEFAULT_ROOT = isWin ? "C:\\Users\\me\\Documents\\Aru" : "/Users/me/Library/Application Support/dev.aruu.aru";
 const DROPBOX = isWin ? "C:\\Users\\me\\Dropbox\\todo" : "/Users/me/Dropbox/todo";
@@ -24,7 +25,7 @@ export default async function (browser) {
     await page.locator('[aria-label="설정"]').click();
     await page.clock.runFor(10);
     const path = page.locator(".settings .path");
-    assert.equal(await path.textContent(), "기본 폴더 (Aru 안)");
+    assert.equal(await path.textContent(), DEFAULT_LABEL);
     assert.equal(await path.getAttribute("title"), DEFAULT_ROOT);
 
     await switchTo(page, DROPBOX, { copied: true });

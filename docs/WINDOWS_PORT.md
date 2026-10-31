@@ -169,7 +169,7 @@ Tauri 2 번들러는 NSIS·MSI만 만든다. MSIX는 직접 만든다 — `scrip
 | D4 | 공유 위반(`SHARING_VIOLATION`) 처리 | **50ms×10 재시도 후 「다른 프로그램이 이 파일을 쓰는 중이에요」로 실패, 자동 저장이 다시 시도** | 잠금 실패(`LOCKED`)와 같은 부류로 화면이 재시도하게 |
 | D5 | CLI 콘솔 실행 파일 분리 | **분리(`aru-cli.exe`)** | 3장. 안 나누면 `AttachConsole` 꼼수로 가능하나 프롬프트가 기다리지 않고 출력이 섞인다 |
 | D6 | 투명도 | **VM에서 A/B 실측 후 결정** | WebView2 + layered window 조합은 문서로 확정 못 함 |
-| D7 | 빠른 입력 기본 단축키 | **Ctrl+Alt+Space** | Alt+Space는 시스템 메뉴·PowerToys Run. 설정으로 빼지 않고 고정(원칙 7, 맥과 같음) |
+| D7 | 빠른 입력 기본 단축키 | **Ctrl+Alt+Space, 이미 등록돼 있으면 Ctrl+Shift+Space** | Alt+Space는 시스템 메뉴·PowerToys Run. 설정으로 빼지 않는다(원칙 7). 실기(2026-10-31): 다른 상주 프로그램이 Ctrl+Alt+Space를 먼저 등록한 PC에서 등록 실패(diag.log `HotKey already registered`) → 두 번째 후보를 둔다 |
 | D8 | 아키텍처 | **x64 + arm64** | 비용은 CI 빌드 한 줄, arm64 검증은 UTM VM이 네이티브 |
 | D9 | 최소 OS | **Windows 10 1903** | D1의 하한. Win11 전용으로 좁히면 설계는 안 바뀌고 대상만 준다 |
 | D10 | Windows e2e 프로필(`E2E_PLATFORM=win`) | **넣는다** | 비용 작고(mock 상수 + 단언 1곳) 맥에서 Windows 화면 회귀를 잡는다 |

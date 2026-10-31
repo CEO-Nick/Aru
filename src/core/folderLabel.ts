@@ -15,8 +15,10 @@ const ONEDRIVE = "~\\OneDrive";
 
 /** 설정에 보일 저장 폴더 이름. 전체 경로는 title로 남긴다 */
 export function folderLabel({ path, isDefault, home }: DataRootInfo, os: Os = "macos"): { label: string; title: string } {
-  if (isDefault) return { label: DEFAULT_FOLDER_LABEL, title: path };
   const win = os === "windows";
+  // 맥 기본 폴더는 앱 컨테이너 안이라 이름만 보인다. Windows 기본 폴더는 문서 아래 Aru라 사용자가 찾아갈 수 있게 위치를 보인다
+  if (isDefault && !win) return { label: DEFAULT_FOLDER_LABEL, title: path };
+  if (isDefault) return { label: `기본 폴더 (${folderLabel({ path, isDefault: false, home }, os).label})`, title: path };
   // Windows는 /도 구분자로 받는다(폴더 고르기 창이 섞어 돌려줄 수 있다)
   const sep = win ? "\\" : "/";
   const norm = (p: string) => (win ? p.replaceAll("/", "\\") : p);

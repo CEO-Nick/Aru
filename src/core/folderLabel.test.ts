@@ -54,9 +54,17 @@ describe("folderLabel", () => {
       expect(folderLabel({ path: "C:\\Users\\me\\OneDriveX\\todo", isDefault: false, home: win }, "windows").label).toBe("~\\OneDriveX\\todo");
     });
 
-    it("기본 폴더는 이름으로 보인다", () => {
+    it("기본 폴더는 위치와 함께 보인다(문서 아래라 사용자가 찾아갈 수 있다)", () => {
       const path = "C:\\Users\\me\\Documents\\Aru";
-      expect(folderLabel({ path, isDefault: true, home: win }, "windows")).toEqual({ label: "기본 폴더 (Aru 안)", title: path });
+      expect(folderLabel({ path, isDefault: true, home: win }, "windows")).toEqual({ label: "기본 폴더 (~\\Documents\\Aru)", title: path });
     });
+  });
+});
+
+describe("folderLabel Windows 기본 폴더", () => {
+  it("기본 폴더도 위치를 보인다(문서 아래 Aru)", () => {
+    const home = "C:\\Users\\me";
+    expect(folderLabel({ path: "C:\\Users\\me\\Documents\\Aru", isDefault: true, home }, "windows").label).toBe("기본 폴더 (~\\Documents\\Aru)");
+    expect(folderLabel({ path: "C:\\Users\\me\\OneDrive\\문서\\Aru", isDefault: true, home }, "windows").label).toBe("기본 폴더 (OneDrive\\문서\\Aru)");
   });
 });

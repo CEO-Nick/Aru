@@ -1,6 +1,7 @@
 // 맥·Windows에서 달라지는 문구·경로·명령. 기본은 맥 기대값으로, E2E_PLATFORM=win이면 Windows 기대값으로 돈다
 import assert from "node:assert/strict";
 import { calls, isWin, openApp, scenario } from "../harness.mjs";
+const DEFAULT_LABEL = isWin ? "기본 폴더 (~\\Documents\\Aru)" : "기본 폴더 (Aru 안)";
 
 const HOME = isWin ? "C:\\Users\\me" : "/Users/me";
 const CLOUD = isWin ? `${HOME}\\OneDrive\\할일` : `${HOME}/Library/Mobile Documents/com~apple~CloudDocs/할일`;
@@ -53,7 +54,7 @@ export default async function (browser) {
     const { page, context } = await openApp(browser);
     await openSettings(page);
     const path = page.locator(".settings .path");
-    assert.equal(await path.textContent(), "기본 폴더 (Aru 안)");
+    assert.equal(await path.textContent(), DEFAULT_LABEL);
     assert.equal(
       await path.getAttribute("title"),
       isWin ? "C:\\Users\\me\\Documents\\Aru" : "/Users/me/Library/Application Support/dev.aruu.aru",
