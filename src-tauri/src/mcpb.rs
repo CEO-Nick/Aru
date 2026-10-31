@@ -51,7 +51,11 @@ pub fn write_bundle(dir: &Path, command: &str, version: &str, author: &str) -> R
     let failed = |e: std::io::Error| format!("Claude에 넘길 확장 파일을 만들지 못했어요: {}", storage::io_message(&e));
     std::fs::create_dir_all(dir).map_err(failed)?;
     let file = dir.join(BUNDLE);
-    storage::replace_file(&file, &bundle(command, version, author)).map_err(failed)?;
+    let bytes = bundle(command, version, author);
+    // 같은 내용을 다시 쓰면 열린 탐색기가 항목을 새로 읽으며 선택을 잃었다(Windows 실기)
+    if std::fs::read(&file).ok().as_deref() != Some(bytes.as_slice()) {
+        storage::replace_file(&file, &bytes).map_err(failed)?;
+    }
     Ok(file)
 }
 
@@ -216,5 +220,17 @@ mod tests {
         remove_bundle(&dir);
         assert!(!file.exists(), "확장 파일이 캐시에 계속 남는다");
         remove_bundle(&dir.join("없는 폴더"));
+    }
+
+    #[test]
+    fn w9_same_bundle_is_not_rewritten() {
+        let dir = scratch("w9-same");
+        let file = write_bundle(&dir, "/x/aru", "1.0.0", "a").unwrap();
+        let first = std::fs::metadata(&file).unwrap().modified().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        write_bundle(&dir, "/x/aru", "1.0.0", "a").unwrap();
+        assert_eq!(std::fs::metadata(&file).unwrap().modified().unwrap(), first);
+        write_bundle(&dir, "/y/aru", "1.0.0", "a").unwrap();
+        assert!(std::fs::read(&file).unwrap().windows(6).any(|w| w == b"/y/aru"));
     }
 }
