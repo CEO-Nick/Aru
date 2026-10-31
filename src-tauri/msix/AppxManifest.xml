@@ -63,8 +63,9 @@
                  <Extensions> (아래 블록을 이리로 옮김) </Extensions>
                </Application> -->
         <uap5:Extension Category="windows.appExecutionAlias" Executable="{{CLI_EXE}}" EntryPoint="Windows.FullTrustApplication">
-          <uap5:AppExecutionAlias desktop4:Subsystem="console">
-            <uap5:ExecutionAlias Alias="aru.exe" />
+          <!-- Subsystem은 ExecutionAlias에 단다. 부모 AppExecutionAlias에 달면 MakeAppx가 매니페스트를 거부한다 -->
+          <uap5:AppExecutionAlias>
+            <uap5:ExecutionAlias Alias="aru.exe" desktop4:Subsystem="console" />
           </uap5:AppExecutionAlias>
         </uap5:Extension>
       </Extensions>
