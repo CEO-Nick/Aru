@@ -480,6 +480,7 @@ const vEditableText: Directive<HTMLElement, string> = {
         class="text"
         :data-id="item.id"
         contenteditable="plaintext-only"
+        spellcheck="false"
         @beforeinput="onItemBeforeInput($event as InputEvent)"
         @input="onItemInput($event, item)"
         @paste="onItemPaste($event, item)"

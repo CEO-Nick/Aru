@@ -40,39 +40,47 @@ fn toggle_quick(app: &AppHandle) {
     *app.state::<QuickState>().0.lock().unwrap() = platform::frontmost_other_app();
     let window = match app.get_webview_window("quick") {
         Some(w) => w,
-        None => {
-            let builder = WebviewWindowBuilder::new(app, "quick", WebviewUrl::App("index.html#quick".into()))
-                .title("Aru 빠른 입력")
-                .inner_size(QUICK_WIDTH, QUICK_HEIGHT);
-            #[cfg(target_os = "macos")]
-            let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
-            #[cfg(windows)]
-            let builder = builder.decorations(false);
-            match builder
-                .resizable(false)
-                .always_on_top(true)
-                .visible_on_all_workspaces(true)
-                .skip_taskbar(true)
-                .visible(false)
-                .build()
-            {
-                Ok(w) => {
-                    platform::round_corners(&w);
-                    w
-                }
-                Err(e) => {
-                    trace(&format!("quick window: {e}"));
-                    return;
-                }
-            }
-        }
+        None => match build_quick(app) {
+            Some(w) => w,
+            None => return,
+        },
     };
     let _ = platform::hide_window_buttons(&window);
     place_on_cursor_screen(app, &window);
     trace("show_quick");
+    diag("quick: show");
     let _ = window.show();
     let _ = window.set_focus();
     let _ = app.emit_to("quick", "quick-shown", ());
+}
+
+/// 빠른 입력창을 숨긴 채 만든다. Windows는 단축키 처리 안에서 창을 만들면 교착할 수 있어 앱 시작 때 미리 만든다
+fn build_quick(app: &AppHandle) -> Option<WebviewWindow> {
+    let builder = WebviewWindowBuilder::new(app, "quick", WebviewUrl::App("index.html#quick".into()))
+        .title("Aru 빠른 입력")
+        .inner_size(QUICK_WIDTH, QUICK_HEIGHT);
+    #[cfg(target_os = "macos")]
+    let builder = builder.title_bar_style(tauri::TitleBarStyle::Overlay).hidden_title(true);
+    #[cfg(windows)]
+    let builder = builder.decorations(false);
+    match builder
+        .resizable(false)
+        .always_on_top(true)
+        .visible_on_all_workspaces(true)
+        .skip_taskbar(true)
+        .visible(false)
+        .build()
+    {
+        Ok(w) => {
+            platform::round_corners(&w);
+            Some(w)
+        }
+        Err(e) => {
+            trace(&format!("quick window: {e}"));
+            diag(&format!("quick: build failed: {e}"));
+            None
+        }
+    }
 }
 
 // 마우스가 있는 화면 위쪽 1/4 지점 가운데에 둔다
@@ -260,6 +268,21 @@ async fn list_names(path: String) -> Result<Vec<String>, String> {
 }
 
 // 화면 자동 점검용: 개발 빌드에서 FT_TRACE=1 이면 어느 창이 무엇을 읽고 쓰는지 출력한다
+/// Windows 실기 시험용 진단 기록. 릴리스 빌드에서도 설정 폴더의 diag.log에 남는다(단축키처럼 화면에 안 드러나는 실패를 가리려고)
+#[cfg(windows)]
+fn diag(message: &str) {
+    use std::io::Write;
+    let Ok((config, _)) = cli::app_dirs() else { return };
+    let _ = std::fs::create_dir_all(&config);
+    if let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(config.join("diag.log")) {
+        let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+        let _ = writeln!(f, "{secs} {message}");
+    }
+}
+
+#[cfg(not(windows))]
+fn diag(_message: &str) {}
+
 fn trace(_message: &str) {
     #[cfg(debug_assertions)]
     if std::env::var("FT_TRACE").is_ok() {
@@ -697,6 +720,17 @@ fn build_tray(app: &App) -> tauri::Result<()> {
     #[cfg(windows)]
     {
         tray = tray.icon(tauri::image::Image::from_bytes(include_bytes!("../icons/32x32.png"))?);
+        // Windows 관례: 왼쪽 클릭은 창 보이기/숨기기, 메뉴는 오른쪽 클릭
+        tray = tray.show_menu_on_left_click(false).on_tray_icon_event(|tray, event| {
+            if let tauri::tray::TrayIconEvent::Click {
+                button: tauri::tray::MouseButton::Left,
+                button_state: tauri::tray::MouseButtonState::Up,
+                ..
+            } = event
+            {
+                toggle_main_window(tray.app_handle());
+            }
+        });
     }
     // 메뉴 막대 아이콘은 흑백 템플릿 이미지여야 다크·라이트 메뉴 막대 색에 맞춰 칠해진다
     #[cfg(not(windows))]
@@ -780,6 +814,7 @@ pub fn run() {
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
                     if event.state() == ShortcutState::Pressed {
+                        diag("shortcut: pressed");
                         toggle_quick(app);
                     }
                 })
@@ -789,9 +824,15 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             build_tray(app)?;
             // 다른 앱이 이미 쓰고 있어 등록에 실패해도 앱은 그대로 쓴다
-            if let Err(e) = app.global_shortcut().register(quick_shortcut()) {
-                trace(&format!("단축키 등록 실패: {e}"));
+            match app.global_shortcut().register(quick_shortcut()) {
+                Ok(()) => diag("shortcut: registered"),
+                Err(e) => {
+                    trace(&format!("단축키 등록 실패: {e}"));
+                    diag(&format!("shortcut: register failed: {e}"));
+                }
             }
+            #[cfg(windows)]
+            build_quick(app.handle());
             #[cfg(not(windows))]
             {
                 let menu = build_app_menu(app)?;
