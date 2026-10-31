@@ -652,7 +652,7 @@ fn install_claude_desktop(app: AppHandle) -> Result<(), String> {
     }
     // 스토어판 Claude는 .mcpb 파일 연결이 없을 수 있다. 파일을 탐색기로 보여 주고 끌어다 놓게 안내한다
     #[cfg(windows)]
-    if claude.is_empty() && platform::reveal(&file) {
+    if claude == platform::REVEAL && platform::reveal(&file) {
         return Err("Claude 데스크톱이 이 파일을 바로 열지 못해 탐색기로 보여 드렸어요. Claude 데스크톱 설정의 확장 프로그램 화면에 Aru.mcpb를 끌어다 놓으면 설치돼요".into());
     }
     Err("Claude 데스크톱으로 확장 파일을 열지 못했어요".into())
@@ -1246,8 +1246,12 @@ mod platform {
             it.any(|e| e.is_ok_and(|e| e.file_name().to_string_lossy().starts_with("Claude_")))
         });
         super::diag(&format!("claude desktop: packaged={packaged}"));
-        packaged.then(String::new)
+        packaged.then(|| REVEAL.to_string())
     }
+
+    /// .mcpb를 받는 앱이 없어 탐색기로 보여 줄 수밖에 없는 Claude(스토어판). 연결이 없을 때 파일을 열면
+    /// Windows가 「연결 프로그램 선택」 창을 띄우고도 성공으로 알려 줘 안내로 넘어가지 못했다(실기)
+    pub const REVEAL: &str = "<reveal>";
 
     /// 탐색기에서 파일을 골라 둔 채 보여 준다
     pub fn reveal(file: &Path) -> bool {
@@ -1257,6 +1261,9 @@ mod platform {
     /// app이 비어 있으면 파일 연결(기본 앱)로 연다
     pub fn open_with(file: &Path, app: &str) -> bool {
         use windows_sys::Win32::UI::Shell::ShellExecuteW;
+        if app == REVEAL {
+            return false;
+        }
         use windows_sys::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
         let open = wide("open".as_ref());
         let result = if app.is_empty() {
