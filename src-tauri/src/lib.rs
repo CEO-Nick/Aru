@@ -352,8 +352,14 @@ async fn write_text_if(
 }
 
 /// date: 작은 창에서 보던 날짜. 모아보기 창이 그 날짜를 골라 둔 채로 열린다
+/// async여야 한다: 동기 명령은 메인 스레드에서 돌고, Windows에서 그 안에서 창을 만들면 WebView2가 메인 스레드를
+/// 기다려 교착한다(달력이 빈 창으로 뜨고 저장·폴더 선택·투명도까지 멈췄다)
 #[tauri::command]
-fn open_overview(app: AppHandle, date: Option<String>) -> Result<(), String> {
+async fn open_overview(app: AppHandle, date: Option<String>) -> Result<(), String> {
+    show_overview(app, date)
+}
+
+fn show_overview(app: AppHandle, date: Option<String>) -> Result<(), String> {
     if let Some(window) = app.get_webview_window("overview") {
         if let Some(date) = date {
             let _ = app.emit_to("overview", "select-date", date);
@@ -726,7 +732,7 @@ fn dev_hooks(app: &App) -> Result<(), String> {
     }
     if let Ok(value) = std::env::var("FT_OPEN_OVERVIEW") {
         let date = (value.len() == 10).then_some(value);
-        open_overview(app.handle().clone(), date)?;
+        show_overview(app.handle().clone(), date)?;
         // 터미널이 전체화면 Space에 있으면 새 창이 다른 데스크톱에 열려 캡처되지 않는다
         if let Some(w) = app.get_webview_window("overview") {
             let _ = w.set_visible_on_all_workspaces(true);
