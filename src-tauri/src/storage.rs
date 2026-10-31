@@ -1431,12 +1431,26 @@ mod tests {
         assert_eq!(names, vec!["someday.md"], "확인용 파일이 남았다");
     }
 
+    /// Windows는 읽기 전용 핸들로 수정 시각을 못 바꾸고, 폴더는 백업 의미로 열어야 한다
+    fn set_mtime(path: &Path, t: SystemTime) {
+        #[cfg(windows)]
+        let f = {
+            use std::os::windows::fs::OpenOptionsExt;
+            const FILE_WRITE_ATTRIBUTES: u32 = 0x100;
+            const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+            fs::OpenOptions::new().access_mode(FILE_WRITE_ATTRIBUTES).custom_flags(FILE_FLAG_BACKUP_SEMANTICS).open(path).unwrap()
+        };
+        #[cfg(not(windows))]
+        let f = fs::File::open(path).unwrap();
+        f.set_modified(t).unwrap();
+    }
+
     fn names_in(dir: &Path) -> Vec<String> {
         let mut out = Vec::new();
         fn walk(base: &Path, dir: &Path, out: &mut Vec<String>) {
             for e in fs::read_dir(dir).unwrap() {
                 let p = e.unwrap().path();
-                out.push(p.strip_prefix(base).unwrap().to_string_lossy().to_string());
+                out.push(p.strip_prefix(base).unwrap().to_string_lossy().replace('\\', "/"));
                 if fs::symlink_metadata(&p).unwrap().is_dir() {
                     walk(base, &p, out);
                 }
@@ -2055,13 +2069,13 @@ mod tests {
         let future = SystemTime::now() + Duration::from_secs(25 * 3600);
         let staging = to.join(format!("{STAGING_PREFIX}1a-2"));
         fs::create_dir(&staging).unwrap();
-        fs::File::open(&staging).unwrap().set_modified(future).unwrap();
+        set_mtime(&staging, future);
         let probe = to.join(format!("{PROBE_FILE}-1a-3"));
         fs::write(&probe, "aru").unwrap();
-        fs::File::open(&probe).unwrap().set_modified(future).unwrap();
+        set_mtime(&probe, future);
         let tmp = to.join(format!("{TEMP_PREFIX}1a-4.someday.md.tmp"));
         fs::write(&tmp, "x").unwrap();
-        fs::File::open(&tmp).unwrap().set_modified(future).unwrap();
+        set_mtime(&tmp, future);
         write_text(&to, "someday.md", "- [ ] 가\n").unwrap();
         assert!(!staging.exists() && !probe.exists() && !tmp.exists(), "{:?}", names_in(&to));
     }
@@ -2162,10 +2176,10 @@ mod tests {
         let to = temp_root("r7-near-future");
         let tmp = to.join(format!("{TEMP_PREFIX}1a-4.someday.md.tmp"));
         fs::write(&tmp, "x").unwrap();
-        fs::File::open(&tmp).unwrap().set_modified(SystemTime::now() + Duration::from_secs(2 * 3600)).unwrap();
+        set_mtime(&tmp, SystemTime::now() + Duration::from_secs(2 * 3600));
         let old = to.join(format!("{TEMP_PREFIX}1a-5.someday.md.tmp"));
         fs::write(&old, "x").unwrap();
-        fs::File::open(&old).unwrap().set_modified(SystemTime::now() - Duration::from_secs(2 * 3600)).unwrap();
+        set_mtime(&old, SystemTime::now() - Duration::from_secs(2 * 3600));
         write_text(&to, "someday.md", "- [ ] 가\n").unwrap();
         assert!(tmp.exists(), "쓰는 중일 수 있는 임시 파일을 지웠다");
         assert!(!old.exists(), "오래된 임시 파일을 남겼다");

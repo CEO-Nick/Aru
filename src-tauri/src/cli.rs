@@ -1807,19 +1807,21 @@ mod tests {
 
     #[test]
     fn w2_windows_설정은_localappdata_기본_저장_폴더는_문서_아래_aru다() {
-        let local = || Some(PathBuf::from("/Users/나/AppData/Local"));
-        let docs = || Some(PathBuf::from("/Users/나/OneDrive/문서"));
-        let home = || Some(PathBuf::from("/Users/나"));
-        let (config, data) = windows_dirs(Some("/C/환경/Local".into()), local, docs, home).unwrap();
-        assert_eq!(config, PathBuf::from("/C/환경/Local").join(IDENTIFIER));
-        assert_eq!(data, PathBuf::from("/Users/나/OneDrive/문서/Aru"));
+        // Windows에서 절대 경로는 드라이브 문자가 있어야 한다
+        let abs = |p: &str| -> PathBuf { if cfg!(windows) { PathBuf::from(format!("C:{p}")) } else { PathBuf::from(p) } };
+        let local = || Some(abs("/Users/나/AppData/Local"));
+        let docs = || Some(abs("/Users/나/OneDrive/문서"));
+        let home = || Some(abs("/Users/나"));
+        let (config, data) = windows_dirs(Some(abs("/C/환경/Local").into()), local, docs, home).unwrap();
+        assert_eq!(config, abs("/C/환경/Local").join(IDENTIFIER));
+        assert_eq!(data, abs("/Users/나/OneDrive/문서/Aru"));
         // LOCALAPPDATA가 비었거나 상대 경로면 계정의 알려진 폴더(FOLDERID_LocalAppData)를 쓴다
         for env in [None, Some("".into()), Some("상대".into())] {
-            assert_eq!(windows_dirs(env, local, docs, home).unwrap().0, PathBuf::from("/Users/나/AppData/Local").join(IDENTIFIER));
+            assert_eq!(windows_dirs(env, local, docs, home).unwrap().0, abs("/Users/나/AppData/Local").join(IDENTIFIER));
         }
         // 문서 폴더를 못 구하면 홈 아래 Documents
-        assert_eq!(windows_dirs(None, local, || None, home).unwrap().1, PathBuf::from("/Users/나/Documents/Aru"));
-        assert_eq!(windows_dirs(None, local, || Some("상대".into()), home).unwrap().1, PathBuf::from("/Users/나/Documents/Aru"));
+        assert_eq!(windows_dirs(None, local, || None, home).unwrap().1, abs("/Users/나/Documents/Aru"));
+        assert_eq!(windows_dirs(None, local, || Some("상대".into()), home).unwrap().1, abs("/Users/나/Documents/Aru"));
         assert_eq!(windows_dirs(None, || None, docs, home), None);
         assert_eq!(windows_dirs(None, local, || None, || None), None);
     }
@@ -1999,6 +2001,8 @@ mod tests {
         assert!(parse_args(&s(&["--"]), true).is_ok());
     }
 
+    // 홈 폴더 규칙은 Unix 경로(드라이브 문자 없는 절대 경로)를 전제한다. Windows 규칙은 w2가 본다
+    #[cfg(not(windows))]
     #[test]
     fn r2_n8_home이_없으면_계정의_홈_폴더를_쓰고_그것도_없으면_오류다() {
         let pw = || Some(PathBuf::from("/Users/누구"));
@@ -2010,6 +2014,8 @@ mod tests {
         assert_eq!(resolve_home(Some("".into()), || Some(PathBuf::from("rel"))), None);
     }
 
+    // 홈 폴더 규칙은 Unix 경로(드라이브 문자 없는 절대 경로)를 전제한다. Windows 규칙은 w2가 본다
+    #[cfg(not(windows))]
     #[test]
     fn r9_q3_샌드박스_컨테이너_홈만_골라_쓰고_아니면_home을_따른다() {
         let data = PathBuf::from("/Users/나/Library/Containers/dev.aruu.aru/Data");

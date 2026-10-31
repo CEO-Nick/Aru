@@ -111,7 +111,7 @@ mod tests {
     #[test]
     fn w8_지원_플랫폼은_실행_중인_os다() {
         let m: serde_json::Value = serde_json::from_str(&manifest(COMMAND, "0.2.8", "조익현")).unwrap();
-        assert_eq!(m["compatibility"]["platforms"], serde_json::json!(["darwin"]));
+        assert_eq!(m["compatibility"]["platforms"], serde_json::json!([mcpb_platform(std::env::consts::OS)]));
         assert_eq!(mcpb_platform("macos"), "darwin");
         assert_eq!(mcpb_platform("windows"), "win32");
         assert_eq!(mcpb_platform("linux"), "linux");

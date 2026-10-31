@@ -1582,7 +1582,7 @@ mod tests {
 
     #[test]
     fn w4_화면에_os를_알린다() {
-        assert_eq!(serde_json::to_value(platform_info()).unwrap(), json!({"os": "macos"}));
+        assert_eq!(serde_json::to_value(platform_info()).unwrap(), json!({"os": os_name(std::env::consts::OS)}));
         assert_eq!(os_name("windows"), "windows");
         assert_eq!(os_name("linux"), "linux");
         assert_eq!(os_name("macos"), "macos");
@@ -1624,6 +1624,7 @@ mod tests {
         assert!(include_str!("../Cargo.toml").contains("required-features = [\"windows-cli\"]"));
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn r11_os_버전은_sw_vers와_같다() {
         let out = std::process::Command::new("/usr/bin/sw_vers").arg("-productVersion").output().unwrap();
