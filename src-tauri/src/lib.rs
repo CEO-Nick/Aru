@@ -1257,18 +1257,21 @@ mod platform {
     /// 이미 열린 탐색기 창이 있으면 그 창에서 선택한다. explorer /select는 누를 때마다 창을 새로 띄웠다(실기)
     pub fn reveal(file: &Path) -> bool {
         use windows_sys::Win32::System::Com::{CoInitializeEx, COINIT_APARTMENTTHREADED};
-        use windows_sys::Win32::UI::Shell::{ILCreateFromPathW, ILFree, SHOpenFolderAndSelectItems};
-        let path = wide(file.as_os_str());
+        use windows_sys::Win32::UI::Shell::{ILCreateFromPathW, ILFindLastID, ILFree, SHOpenFolderAndSelectItems};
+        let Some(parent) = file.parent() else { return false };
+        let (folder_path, file_path) = (wide(parent.as_os_str()), wide(file.as_os_str()));
+        // 파일 하나만 넘기면 이미 열린 창을 다시 쓸 때 선택이 풀렸다(실기). 폴더 + 그 안의 항목으로 넘긴다
         let shown = unsafe {
             CoInitializeEx(std::ptr::null(), COINIT_APARTMENTTHREADED as u32);
-            let item = ILCreateFromPathW(path.as_ptr());
-            if item.is_null() {
-                false
-            } else {
-                let ok = SHOpenFolderAndSelectItems(item, 0, std::ptr::null(), 0) >= 0;
-                ILFree(item);
-                ok
-            }
+            let folder = ILCreateFromPathW(folder_path.as_ptr());
+            let item = ILCreateFromPathW(file_path.as_ptr());
+            let ok = !folder.is_null() && !item.is_null() && {
+                let child = ILFindLastID(item) as *const _;
+                SHOpenFolderAndSelectItems(folder, 1, &child, 0) >= 0
+            };
+            if !folder.is_null() { ILFree(folder) }
+            if !item.is_null() { ILFree(item) }
+            ok
         };
         super::diag(&format!("claude desktop: reveal shell={shown}"));
         shown || std::process::Command::new("explorer.exe").arg(format!("/select,{}", file.display())).spawn().is_ok()
