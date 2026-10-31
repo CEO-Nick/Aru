@@ -824,11 +824,17 @@ pub fn run() {
             #[cfg(not(target_os = "macos"))]
             build_tray(app)?;
             // 다른 앱이 이미 쓰고 있어 등록에 실패해도 앱은 그대로 쓴다
-            match app.global_shortcut().register(quick_shortcut()) {
-                Ok(()) => diag("shortcut: registered"),
-                Err(e) => {
-                    trace(&format!("단축키 등록 실패: {e}"));
-                    diag(&format!("shortcut: register failed: {e}"));
+            // 앞의 조합을 다른 프로그램이 이미 쓰고 있으면 다음 후보로 등록한다
+            for shortcut in quick_shortcuts() {
+                match app.global_shortcut().register(shortcut) {
+                    Ok(()) => {
+                        diag(&format!("shortcut: registered {shortcut}"));
+                        break;
+                    }
+                    Err(e) => {
+                        trace(&format!("단축키 등록 실패: {e}"));
+                        diag(&format!("shortcut: register failed: {e}"));
+                    }
                 }
             }
             #[cfg(windows)]
@@ -889,14 +895,18 @@ pub fn run() {
 }
 
 #[cfg(not(windows))]
-fn quick_shortcut() -> Shortcut {
-    Shortcut::new(Some(Modifiers::ALT), Code::Space)
+fn quick_shortcuts() -> Vec<Shortcut> {
+    vec![Shortcut::new(Some(Modifiers::ALT), Code::Space)]
 }
 
-// Alt+Space는 Windows 창 시스템 메뉴·PowerToys Run이 쓴다
+// Alt+Space는 Windows 창 시스템 메뉴·PowerToys Run이 쓴다.
+// Ctrl+Alt+Space는 입력기·다른 앱이 이미 등록해 둔 PC가 있어(실기 시험에서 등록 실패) 다음 후보를 둔다
 #[cfg(windows)]
-fn quick_shortcut() -> Shortcut {
-    Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space)
+fn quick_shortcuts() -> Vec<Shortcut> {
+    vec![
+        Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::Space),
+        Shortcut::new(Some(Modifiers::CONTROL | Modifiers::SHIFT), Code::Space),
+    ]
 }
 
 #[cfg(target_os = "macos")]

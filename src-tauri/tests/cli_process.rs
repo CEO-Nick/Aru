@@ -1,4 +1,7 @@
 //! 실제 aru 바이너리를 여러 프로세스로 띄워 확인한다. HOME은 매번 임시 폴더로 바꿔 사용자 데이터를 건드리지 않는다
+//! HOME 격리·`date`·TZ·PATH 같은 Unix 프로세스 환경을 전제한다. Windows는 저장 위치가 알려진 폴더 API라 HOME으로 격리되지 않아
+//! 단위 테스트(NTFS)와 실기 시험(aru list·add)으로 본다
+#![cfg(unix)]
 
 use std::path::PathBuf;
 use std::process::{Command, Output};
@@ -85,7 +88,6 @@ fn b9_date_명령_없이_tz의_오늘을_쓴다() {
     assert!(o.status.success(), "{}", text(&o));
 }
 
-#[cfg(unix)]
 #[test]
 fn b10_utf8이_아닌_인자는_오류로_끝난다() {
     use std::os::unix::ffi::OsStrExt;
