@@ -692,7 +692,16 @@ fn build_app_menu(app: &App) -> tauri::Result<Menu<tauri::Wry>> {
         .paste()
         .select_all()
         .build()?;
-    let window = SubmenuBuilder::new(app, "윈도우").minimize().close_window().build()?;
+    // 닫기는 창을 숨길 뿐이라 메뉴에서 다시 열 수 있어야 한다. Dock 클릭만으로는 App Review가 반려했다(Guideline 4, 2026-11-03)
+    let main = MenuItemBuilder::with_id("app-show-main", "Aru")
+        .accelerator("CmdOrCtrl+0")
+        .build(app)?;
+    let window = SubmenuBuilder::new(app, "윈도우")
+        .minimize()
+        .close_window()
+        .separator()
+        .item(&main)
+        .build()?;
     MenuBuilder::new(app).items(&[&app_menu, &edit, &window]).build()
 }
 
@@ -851,10 +860,10 @@ pub fn run() {
             {
                 let menu = build_app_menu(app)?;
                 app.set_menu(menu)?;
-                app.on_menu_event(|app, event| {
-                    if event.id().as_ref() == "app-quit" {
-                        request_quit(app);
-                    }
+                app.on_menu_event(|app, event| match event.id().as_ref() {
+                    "app-quit" => request_quit(app),
+                    "app-show-main" => show_main_window(app),
+                    _ => {}
                 });
             }
             if let Some(main) = app.get_webview_window("main") {
